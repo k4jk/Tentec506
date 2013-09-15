@@ -210,14 +210,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define  Other_3_user                       2           //
 
 //Optional Features
-//#define FEATURE_DISPLAY            // LCD display support (include one of the hardware options below)
+#define FEATURE_DISPLAY            // LCD display support (include one of the hardware options below)
 //#define FEATURE_LCD           // classic LCD display using 4 I/O lines
-//#define FEATURE_LCD_I2C            // I2C LCD display
-//#define FEATURE_LCD_I2C_SSD1306    // Uncomment with LCD_I2C if using an Adafruit 1306 OLED Display
+#define FEATURE_LCD_I2C            // I2C LCD display
+#define FEATURE_LCD_I2C_SSD1306    // Uncomment with LCD_I2C if using an Adafruit 1306 OLED Display
 //#define FEATURE_CW_DECODER
 //#define FEATURE_KEYER
 //#define FEATURE_BEACON
-//#define FEATURE_SERIAL
+#define FEATURE_SERIAL
 
 
 const int RitReadPin        = A0;  // pin that the sensor is attached to used for a rit routine later.
@@ -228,7 +228,8 @@ const int SmeterReadPin     = A1;  // To give a realitive signal strength based 
 int SmeterReadValue         = 0;
 
 const int BatteryReadPin    = A2;  // Reads 1/5 th or 0.20 of supply voltage.
-int BatteryReadValue        = 0;
+float BatteryReadValue     = 0;
+float BatteryVconvert      = 0.01707;  //callibrated on 13.8v ps
 
 const int PowerOutReadPin   = A3;  // Reads RF out voltage at Antenna.
 int PowerOutReadValue       = 0;
@@ -247,15 +248,15 @@ const char txt5[8]          = "10 KHZ ";
 const char txt52[5]         = " ";
 const char txt57[6]         = "FREQ:" ;
 const char txt60[6]         = "STEP:";
-const char txt62[3]         = "RX";
-const char txt64[4]         = "RIT";
+const char txt62[4]         = "RX:";
+const char txt64[5]         = "RIT:";
 const char txt65[5]         = "Band";
 const char txt66[4]         = "20M";
 const char txt67[4]         = "40M";
-String stringFREQ;
-String stringREF;
-String stringfrequency_step;
-String stringRIT;
+const char txt68[4]         = "TX:";
+const char txt69[3]         = "V:";
+const char txt70[3]         = "S:";
+
 
 #ifdef FEATURE_LCD_4BIT
 
@@ -322,7 +323,8 @@ const long Reference            = 49.99975e6;   // for ad9834 this may be
                                                 // fine tune the Radio
 
 long RIT_frequency;
-long RX_frequency; 
+long RX_frequency;
+long TX_frequency;
 long save_rec_frequency;
 long frequency_step;
 long frequency                  = 0;
@@ -371,10 +373,6 @@ void Band_40M_limits_led();
 void Band_20M_limits_led();
 void Step_Flash();
 void RIT_Read();
-
-#ifdef FEATURE_DISPLAY
-void Band_Splash();
-#endif
 
 void Multi_Function();          //
 void Step_Selection();          // 
@@ -472,15 +470,16 @@ void setup()
     //attachInterrupt(encoder0PinB, Encoder, CHANGE);
     attachCoreTimerService(TimerOverFlow);//See function at the bottom of the file.
 
+#ifdef FEATURE_SERIAL
     Serial.begin(115200);
     Serial.println("Rebel Ready:");
+#endif
     
 #ifdef FEATURE_LCD_I2C_SSD1306	
   // by default, we'll generate the high voltage from the 3.3v line internally! (neat!)
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x32)
   display.display(); // show splashscreen
-  Band_Splash();
-  delay(5000);
+  delay(2000);
   display.clearDisplay();   // clears the screen and buffer
 #endif
 
@@ -533,29 +532,33 @@ void loop()     //
 
     frequency_tune  = frequency + RitFreqOffset;
     UpdateFreq(frequency_tune);
-    //splash_RX_freq();   // this only needs to be updated when encoder changed.
 
     TX_routine();
 
 
     loopCount++;
-    loopElapsedTime    = millis() - loopStartTime;
+    loopElapsedTime    = millis() - loopStartTime;    // comment this out to remove the one second tick
 
     // has 1000 milliseconds elasped?
     if( 1000 <= loopElapsedTime )
     {
-        serialDump();    // comment this out to remove the one second tick
-        #ifdef FEATURE_DISPLAY
-        splash_RX_freq(); 
+        #ifdef FEATURE_SERIAL
+        serialDump();
         #endif
+        
+        #ifdef FEATURE_DISPLAY
+        Display_Refresh(); 
+        #endif
+        loopStartTime   = millis();
     }
 
 }    //  END LOOP
+
+#ifdef FEATURE_SERIAL
 //===================================================================
 //------------------ Debug data output ------------------------------
 void    serialDump()
 {
-    loopStartTime   = millis();
     loopsPerSecond  = loopCount - lastLoopCount;
     loopSpeed       = (float)1e6 / loopsPerSecond;
     lastLoopCount   = loopCount;
@@ -577,8 +580,7 @@ void    serialDump()
     Serial.println  ();
     
 } // end serialDump()
-
-
+#endif //FEATURE_SERIAL
 
 //------------------ Band Select ------------------------------------
 void Band_Set_40_20M()
@@ -589,16 +591,10 @@ void Band_Set_40_20M()
     if ( bsm == 1 ) 
     { 
         frequency_default = meter_20;
-        #ifdef FEATURE_DISPLAY
-        Band_Splash(); 
-        #endif
     }
     else 
     { 
         frequency_default = meter_40; 
-        #ifdef FEATURE_DISPLAY
-        Band_Splash();
-        #endif
         IF *= -1;               //  HI side injection
     }
 
@@ -794,9 +790,7 @@ void Default_frequency()
 {
     frequency = frequency_default;
     UpdateFreq(frequency);
-    #ifdef FEATURE_DISPLAY
-    splash_RX_freq();
-    #endif
+
     //*************************************************************************
 }   //  end   Default_frequency
 
@@ -850,62 +844,44 @@ void Band_Splash()
 
 #ifdef FEATURE_LCD_I2C
 //------------------------Display Stuff below-----------------------------------
-//------------------- Splash RIT -----------------------------------------------  
-
-void splash_RIT()      // not used
-{ 
-    display.clearDisplay();                         // Clear display
-    display.setCursor(0,0);
-    display.print(txt64);                       //  RIT
-    display.setCursor(5,0);
-    stringRIT = String(RitReadValue, DEC);
-    display.print(stringRIT);
-    display.display();
-}
-//------------------------------------------------------------------------------
-void splash_RX_freq()
+void Display_Refresh()
 {
     bsm = digitalRead(Band_Select); 
      
-     RX_frequency = frequency_tune + IF;
+    RX_frequency = frequency_tune + IF;
+    TX_frequency = frequency + IF;
     display.clearDisplay();   // clears the screen and buffer
-    display.setTextSize(2);
+    display.setTextSize(1);
     display.setTextColor(WHITE);
-    display.setCursor(0,1);
+    display.setCursor(3,3);
     display.print(txt62); // RX
-    display.setCursor(32,1);
-    stringFREQ = String(RX_frequency, DEC);
-    display.print(stringFREQ);
+    display.setCursor(20,3);
+    display.print(RX_frequency * 0.001);
+	
+    display.setCursor(3,12);	
+    display.print(txt68); // TX
+    display.setCursor(20,12);
+    display.print(TX_frequency * 0.001);
+      
+    display.setCursor(75,12);
+    display.print(txt69); // V
+    BatteryReadValue = analogRead(BatteryReadPin)* BatteryVconvert;
+    display.setCursor(88,12);
+    display.print(BatteryReadValue);
+
+    display.setCursor(75,3);
+    display.print(txt70); // S
+    SmeterReadValue = analogRead(SmeterReadPin);
+    SmeterReadValue = map(SmeterReadValue, 0, 180, 0, 9);
+    display.setCursor(88,3);
+    display.print(SmeterReadValue);
+    
+    display.drawRect(0, 0, display.width(), display.height(), WHITE);
+
     display.display();
+ 
  }
-
-//-----------------------------------------------------------------
-void Band_Splash()
-{
-    if ( bsm == 1 ) 
-    {    
-        display.clearDisplay();   // clears the screen and buffer
-        display.setTextSize(2);
-        display.setTextColor(WHITE);
-        display.setCursor(0,0);
-        display.print(txt65); 
-        display.setCursor(24,0);
-        display.print(txt66);
-    }
-    else 
-    {
-        display.clearDisplay();   // clears the screen and buffer
-        display.setTextSize(1);
-        display.setTextColor(WHITE);
-        display.setCursor(0,0);
-        display.print(txt65); 
-        display.setCursor(24,0);
-        display.print(txt67);
-    } 
-display.display();
-}   
-
-#endif //FEATURE_display_I2C
+#endif
 
 //---------------------------------------------------------------------------------
 //stuff above is for testing using the Display Comment out if not needed  
@@ -1117,7 +1093,6 @@ void S_R()  // Select Red
 
     for (int i=0; i <= 255; i++); // short delay
 }
-
 
 //----------------------------------------------------------------------------------
 void Band_Width_W()
