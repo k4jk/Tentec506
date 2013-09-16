@@ -640,9 +640,9 @@ void    serialDump()
     Serial.println  ( frequency_tune + IF );
     Serial.print    ( "Freq Tx: " );
     Serial.println  ( frequency + IF );
-    Serial.print    ( "Keyer WPM: " );
     
     #ifdef FEATURE_KEYER
+    Serial.print    ( "Keyer WPM: " );
     Serial.println  ( CWSpeedReadValue );
     Serial.println  ();
     #endif
