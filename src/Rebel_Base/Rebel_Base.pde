@@ -295,6 +295,7 @@ const char txt67[4]         = "40M";
 const char txt68[4]         = "TX:";
 const char txt69[3]         = "V:";
 const char txt70[3]         = "S:";
+const char txt71[5]         = "WPM:";
 #endif  //FEATURE_DISPLAY
 
 #ifdef FEATURE_LCD_4BIT
@@ -642,7 +643,7 @@ void    serialDump()
     Serial.println  ( frequency + IF );
     
     #ifdef FEATURE_KEYER
-    Serial.print    ( "Keyer WPM: " );
+    Serial.print    ( txt71 );
     Serial.println  ( CWSpeedReadValue );
     Serial.println  ();
     #endif
@@ -1091,7 +1092,11 @@ void Display_Refresh()  //SSD1306 I2C OLED Version
     display.print(SmeterReadValue);
     
     display.drawRect(0, 0, display.width(), display.height(), WHITE);
-
+    
+    display.setCursor(3,21);	
+    display.print(txt71); // WPM
+    display.setCursor(20,21);
+    display.print(CWSpeedReadValue);
     display.display();
  
  }
