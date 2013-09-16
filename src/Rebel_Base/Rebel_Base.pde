@@ -1,3 +1,4 @@
+
 /*
 <Rebel_506_Alpha_Rev01, Basic Software to operate a 2 band QRP Transceiver.
              See PROJECT REBEL QRP below>
@@ -159,10 +160,25 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
    TX_Dit  33    now  32
   
   May 15, 2013. (WA4CDM) This Rev(01) for posting on Yahoo users group.
+  
+  Release Date to Production 7/15/2013
 */
 
 
-
+/* September 15, 2013. (K4JK) Added simple IAMBIC keyer. Code adapted from openqrp.org.
+  Speed can be changed by changing the argument to the loadWPM() function in setup().
+  Mode set to IAMBICB by default.
+  For comments or questions please use the Ten Tec yahoo group or email k4jk@arrl.net
+  
+  You can also use a straight key. Just connect it at startup and keyer routine will use this mode.
+  
+  You can also hold down either paddle lever at startup to enter straight key mode. This will
+  allow you to emulate a straight key with one of the paddle levers.
+  
+  73, James - K4JK
+  */
+  
+  
 // various defines
 #define SDATA_BIT                           10          //  keep!
 #define SCLK_BIT                            8           //  keep!
@@ -210,14 +226,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define  Other_3_user                       2           //
 
 //Optional Features
-#define FEATURE_DISPLAY            // LCD display support (include one of the hardware options below)
-//#define FEATURE_LCD           // classic LCD display using 4 I/O lines
-#define FEATURE_LCD_I2C            // I2C LCD display
-#define FEATURE_LCD_I2C_SSD1306    // Uncomment with LCD_I2C if using an Adafruit 1306 OLED Display
+//#define FEATURE_DISPLAY            // LCD display support (include one of the hardware options below)
+//#define FEATURE_LCD           	 // classic LCD display using 4 I/O lines
+//#define FEATURE_LCD_I2C            // I2C LCD display
+//#define FEATURE_LCD_I2C_SSD1306    // Uncomment with LCD_I2C if using an Adafruit 1306 OLED Display
 //#define FEATURE_CW_DECODER
 //#define FEATURE_KEYER
 //#define FEATURE_BEACON
-#define FEATURE_SERIAL
+//#define FEATURE_SERIAL
+
 
 
 const int RitReadPin        = A0;  // pin that the sensor is attached to used for a rit routine later.
@@ -240,6 +257,24 @@ int CodeReadValue           = 0;
 const int CWSpeedReadPin    = A7;  // To adjust CW speed for user written keyer.
 int CWSpeedReadValue        = 0;            
 
+#ifdef FEATURE_KEYER
+//  keyerControl bit definitions
+//
+#define     DIT_L      0x01     // Dit latch
+#define     DAH_L      0x02     // Dah latch
+#define     DIT_PROC   0x04     // Dit is being processed
+#define     PDLSWAP    0x08     // 0 for normal, 1 for swap
+#define     IAMBICB    0x10     // 0 for Iambic A, 1 for Iambic B
+// 
+//Keyer Variables
+unsigned long       ditTime;                    // No. milliseconds per dit
+unsigned char       keyerControl;
+unsigned char       keyerState;
+int ST_key = 0;        //This variable tells TX routine whether to enter use straight key mode
+enum KSTYPE {IDLE, CHK_DIT, CHK_DAH, KEYED_PREP, KEYED, INTER_ELEMENT };
+
+#endif // FEATURE_KEYER
+
 #ifdef FEATURE_DISPLAY
 		
 const char txt3[8]          = "100 HZ ";
@@ -257,7 +292,6 @@ const char txt68[4]         = "TX:";
 const char txt69[3]         = "V:";
 const char txt70[3]         = "S:";
 
-
 #ifdef FEATURE_LCD_4BIT
 
 #include <LiquidCrystal.h>    //  LCD Stuff
@@ -273,8 +307,8 @@ lcd.begin(16, 4);                           // 20 chars 4 lines
 #include <Wire.h>  //I2C Library
 
 #ifdef FEATURE_LCD_I2C_SSD1306  
-#include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <Adafruit_GFX.h>
 #define OLED_RESET 4
 Adafruit_SSD1306 display(OLED_RESET);
 
@@ -474,7 +508,18 @@ void setup()
     Serial.begin(115200);
     Serial.println("Rebel Ready:");
 #endif
+
+#ifdef FEATURE_KEYER
+    keyerState = IDLE;
+    keyerControl = IAMBICB;      
+    loadWPM(18);                 // Fix speed at 15 WPM 
     
+    //See if user wants to use a straight key
+    if ((digitalRead(TX_Dah) == LOW) || (digitalRead(TX_Dit) == LOW)) {    //Is a lever pressed?
+      ST_key = 1;      //If so, enter straight key mode
+    }
+#endif
+
 #ifdef FEATURE_LCD_I2C_SSD1306	
   // by default, we'll generate the high voltage from the 3.3v line internally! (neat!)
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x32)
@@ -671,7 +716,7 @@ void UpdateFreq(long freq)
 
 
 
-
+#ifndef FEATURE_KEYER
 //---------------------  TX Routine  ------------------------------------------------  
 void TX_routine()
 {
@@ -694,7 +739,156 @@ void TX_routine()
         digitalWrite(Side_Tone, LOW);
     }
 }
+#endif
 
+#ifdef FEATURE_KEYER
+//---------------------  TX Routine  ------------------------------------------------  
+// Will detect straight key at startup.
+// James - K4JK
+
+void TX_routine()
+{
+
+ if (ST_key == 1) { // is ST_Key is set to YES? Then use Straight key mode
+ 
+   TX_key = digitalRead(TX_Dit);
+    if ( TX_key == LOW)         // was high   
+    {
+        //   (FREQ_REGISTER_BIT, HIGH) is selected      
+        do
+        {
+            digitalWrite(FREQ_REGISTER_BIT, HIGH);
+            digitalWrite(TX_OUT, HIGH);
+            digitalWrite(Side_Tone, HIGH);
+            TX_key = digitalRead(TX_Dit);
+        } while (TX_key == LOW);   // was high 
+
+        digitalWrite(TX_OUT, LOW);  // trun off TX
+        for (int i=0; i <= 10e3; i++); // delay for maybe some decay on key release
+
+        digitalWrite(FREQ_REGISTER_BIT, LOW);
+        digitalWrite(Side_Tone, LOW);
+    }
+ } 
+   else {    //If ST_key is not 1, then use IAMBIC
+  
+  static long ktimer;
+  
+  // Basic Iambic Keyer
+  // keyerControl contains processing flags and keyer mode bits
+  // Supports Iambic A and B
+  // State machine based, uses calls to millis() for timing.
+  // Code adapted from openqrp.org
+ 
+  switch (keyerState) {
+    case IDLE:
+        // Wait for direct or latched paddle press
+        if ((digitalRead(TX_Dit) == LOW) ||
+                (digitalRead(TX_Dah) == LOW) ||
+                    (keyerControl & 0x03)) {
+            update_PaddleLatch();
+            keyerState = CHK_DIT;
+        }
+        break;
+
+    case CHK_DIT:
+        // See if the dit paddle was pressed
+        if (keyerControl & DIT_L) {
+            keyerControl |= DIT_PROC;
+            ktimer = ditTime;
+            keyerState = KEYED_PREP;
+        }
+        else {
+            keyerState = CHK_DAH;
+        }
+        break;
+        
+    case CHK_DAH:
+        // See if dah paddle was pressed
+        if (keyerControl & DAH_L) {
+            ktimer = ditTime*3;
+            keyerState = KEYED_PREP;
+        }
+        else {
+            keyerState = IDLE;
+        }
+        break;
+        
+    case KEYED_PREP:
+        // Assert key down, start timing, state shared for dit or dah
+        digitalWrite(FREQ_REGISTER_BIT, HIGH);
+        digitalWrite(TX_OUT, HIGH);         // key the line
+        digitalWrite(Side_Tone, HIGH);      // Tone
+        ktimer += millis();                 // set ktimer to interval end time
+        keyerControl &= ~(DIT_L + DAH_L);   // clear both paddle latch bits
+        keyerState = KEYED;                 // next state
+        break;
+        
+    case KEYED:
+        // Wait for timer to expire
+        if (millis() > ktimer) {            // are we at end of key down ?
+            digitalWrite(TX_OUT, LOW);      // turn the key off
+            for (int i=0; i <= 10e3; i++); // delay for maybe some decay on key release
+            digitalWrite(FREQ_REGISTER_BIT, LOW);
+            digitalWrite(Side_Tone, LOW);
+            ktimer = millis() + ditTime;    // inter-element time
+            keyerState = INTER_ELEMENT;     // next state
+        }
+        else if (keyerControl & IAMBICB) {
+            update_PaddleLatch();           // early paddle latch in Iambic B mode
+        }
+        break; 
+ 
+    case INTER_ELEMENT:
+        // Insert time between dits/dahs
+        update_PaddleLatch();               // latch paddle state
+        if (millis() > ktimer) {            // are we at end of inter-space ?
+            if (keyerControl & DIT_PROC) {             // was it a dit or dah ?
+                keyerControl &= ~(DIT_L + DIT_PROC);   // clear two bits
+                keyerState = CHK_DAH;                  // dit done, check for dah
+            }
+            else {
+                keyerControl &= ~(DAH_L);              // clear dah latch
+                keyerState = IDLE;                     // go idle
+            }
+        }
+        break;
+  }
+ }
+
+}
+
+
+
+///////////////////////////////////////////////////////////////////////////////
+//
+//    Latch dit and/or dah press
+//
+//    Called by keyer routine
+//
+///////////////////////////////////////////////////////////////////////////////
+ 
+void update_PaddleLatch()
+{
+    if (digitalRead(TX_Dit) == LOW) {
+        keyerControl |= DIT_L;
+    }
+    if (digitalRead(TX_Dah) == LOW) {
+        keyerControl |= DAH_L;
+    }
+}
+ 
+///////////////////////////////////////////////////////////////////////////////
+//
+//    Calculate new time constants based on wpm value
+//
+///////////////////////////////////////////////////////////////////////////////
+ 
+void loadWPM (int wpm)
+{
+    ditTime = 1200/wpm;
+}
+#endif
 
 
 //----------------------------------------------------------------------------
