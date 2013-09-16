@@ -511,7 +511,7 @@ void setup()
 #ifdef FEATURE_KEYER
     keyerState = IDLE;
     keyerControl = IAMBICB;      
-    loadWPM(18);                 // Fix speed at 15 WPM 
+    checkWPM();                 // Check CW Speed 
     
     //See if user wants to use a straight key
     if ((digitalRead(TX_Dah) == LOW) || (digitalRead(TX_Dit) == LOW)) {    //Is a lever pressed?
@@ -519,7 +519,7 @@ void setup()
     }
 #endif
 
-#ifdef FEATURE_LCD_4BIT
+#ifdef FEATURE_LCD_4BIT  //Initialize 4bit Display
 //--------------------------------------------------------------
   lcd.begin(16, 4);                           // 20 chars 4 lines
                                               // or change to suit ones 
@@ -601,6 +601,10 @@ void loop()     //
     // has 1000 milliseconds elasped?
     if( 1000 <= loopElapsedTime )
     {
+        #ifdef FEATURE_KEYER
+        checkWPM();
+        #endif
+      
         #ifdef FEATURE_SERIAL
         serialDump();
         #endif
@@ -636,7 +640,12 @@ void    serialDump()
     Serial.println  ( frequency_tune + IF );
     Serial.print    ( "Freq Tx: " );
     Serial.println  ( frequency + IF );
+    Serial.print    ( "Keyer WPM: " );
+    
+    #ifdef FEATURE_KEYER
+    Serial.println  ( CWSpeedReadValue );
     Serial.println  ();
+    #endif
     
 } // end serialDump()
 #endif //FEATURE_SERIAL
@@ -897,13 +906,19 @@ void update_PaddleLatch()
 //    Calculate new time constants based on wpm value
 //
 ///////////////////////////////////////////////////////////////////////////////
- 
-void loadWPM (int wpm)
+
+void loadWPM(int wpm)
 {
     ditTime = 1200/wpm;
 }
 #endif
 
+void checkWPM() //Checks the Keyer speed Pot and updates value
+{
+   CWSpeedReadValue = analogRead(CWSpeedReadPin);
+   CWSpeedReadValue = map(CWSpeedReadValue, 0, 1024, 5, 40);
+   loadWPM(CWSpeedReadValue);
+}
 
 //----------------------------------------------------------------------------
 void RIT_Read()
