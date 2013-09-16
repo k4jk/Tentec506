@@ -164,6 +164,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
   Release Date to Production 7/15/2013
 */
 
+/* September 15, 2013 (KD8FJO) Added Optional feature selection.  Under Optional features uncomment the features you need. 
+   Paul - KD8FJO
+  */
 
 /* September 15, 2013. (K4JK) Added simple IAMBIC keyer. Code adapted from openqrp.org.
   Speed can be changed by changing the argument to the loadWPM() function in setup().
@@ -552,7 +555,9 @@ void Default_Settings()
 
     digitalWrite(Select_Green,          LOW);   //
                                                 // place control here
-    digitalWrite (TX_OUT,               LOW);                                            
+    digitalWrite (TX_OUT,               LOW);   
+
+    digitalWrite(FREQ_REGISTER_BIT,     LOW);  //This is set to LOW so RX is not dead on power on        
                                                 
     digitalWrite (Band_End_Flash_led,   LOW);
 
