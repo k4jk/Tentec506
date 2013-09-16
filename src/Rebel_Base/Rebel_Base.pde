@@ -229,10 +229,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define  Other_3_user                       2           //
 
 //Optional Features
-//#define FEATURE_DISPLAY            // LCD display support (include one of the hardware options below)
-//#define FEATURE_LCD           	 // classic LCD display using 4 I/O lines
-//#define FEATURE_LCD_I2C            // I2C LCD display
-//#define FEATURE_LCD_I2C_SSD1306    // Uncomment with LCD_I2C if using an Adafruit 1306 OLED Display
+//#define FEATURE_DISPLAY              // LCD display support (include one of the interface and model options below)
+//#define FEATURE_LCD_4BIT             // Classic LCD display using 4 I/O lines
+//#define FEATURE_I2C                  // I2C Support
+//#define FEATURE_LCD_I2C_SSD1306      // If using an Adafruit 1306 I2C OLED Display
+//#define FEATURE_LCD_I2C_1602         // 1602 Display with I2C interface.
 //#define FEATURE_CW_DECODER
 //#define FEATURE_KEYER
 //#define FEATURE_BEACON
@@ -294,33 +295,28 @@ const char txt67[4]         = "40M";
 const char txt68[4]         = "TX:";
 const char txt69[3]         = "V:";
 const char txt70[3]         = "S:";
+#endif  //FEATURE_DISPLAY
 
 #ifdef FEATURE_LCD_4BIT
-
-#include <LiquidCrystal.h>    //  LCD Stuff
+#include <LiquidCrystal.h>    //  Classic LCD Stuff
 LiquidCrystal lcd(26, 27, 28, 29, 30, 31);      //  LCD Stuff
-//--------------------------------------------------------------
-lcd.begin(16, 4);                           // 20 chars 4 lines
-                                            // or change to suit ones 
-                                            // lcd display 
-//--------------------------------------------------------------
 #endif //FEATURE_LCD_4BIT
-	
-#ifdef FEATURE_LCD_I2C
+
+#ifdef FEATURE_I2C
 #include <Wire.h>  //I2C Library
+#endif //FEATURE_I2C
 
 #ifdef FEATURE_LCD_I2C_SSD1306  
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_GFX.h>
 #define OLED_RESET 4
 Adafruit_SSD1306 display(OLED_RESET);
-
 #endif //SSD1306
 
-#endif //FEATURE_LCD_I2C
-	
-#endif  //FEATURE_DISPLAY
-
+#ifdef FEATURE_LCD_I2C_1602  
+#include <LiquidCrystal_I2C.h>
+LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
+#endif //I2C_1602
 
 int TX_key;
 
@@ -523,13 +519,26 @@ void setup()
     }
 #endif
 
-#ifdef FEATURE_LCD_I2C_SSD1306	
+#ifdef FEATURE_LCD_4BIT
+//--------------------------------------------------------------
+  lcd.begin(16, 4);                           // 20 chars 4 lines
+                                              // or change to suit ones 
+                                              // lcd display 
+//--------------------------------------------------------------
+#endif
+
+#ifdef FEATURE_LCD_I2C_SSD1306	//Initialize SSD1306 Display
   // by default, we'll generate the high voltage from the 3.3v line internally! (neat!)
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x32)
   display.display(); // show splashscreen
   delay(2000);
   display.clearDisplay();   // clears the screen and buffer
 #endif
+
+#ifdef FEATURE_LCD_I2C_1602  //Initialize I2C 1602 Display
+  lcd.init();                      // initialize the lcd 
+#endif
+
 
 }   //    end of setup
 
@@ -996,54 +1005,45 @@ void Default_frequency()
 
 #ifdef FEATURE_LCD_4BIT
 //------------------------Display Stuff below-----------------------------------
-//------------------- Splash RIT ----------------------------------------------- 
 
-void splash_RIT()      // not used
-{ 
-    // lcd.clear();                         // Clear display
-    lcd.setCursor(0, 0);
-    lcd.print(txt64);                       //  RIT
-    lcd.setCursor(5, 0);
-    stringRIT = String(RitReadValue, DEC);
-    lcd.print(stringRIT);
-
-}
-//------------------------------------------------------------------------------
-void splash_RX_freq()
+void Display_Refresh()  //LCD_4Bit Version
 {
     bsm = digitalRead(Band_Select); 
      
-      RX_frequency = frequency + IF;
-
-      lcd.setCursor(0, 1);
+    RX_frequency = frequency_tune + IF;
+    TX_frequency = frequency + IF;
+    lcd.clear();   // Clear Display
+    lcd.setCursor(0,0);
     lcd.print(txt62); // RX
-    lcd.setCursor(6, 1);
-    stringFREQ = String(RX_frequency, DEC);
-    lcd.print(stringFREQ);
- }
+    lcd.setCursor(5,0);
+    lcd.print(RX_frequency * 0.001);
+	
+    lcd.setCursor(0,1);	
+    lcd.print(txt68); // TX
+    lcd.setCursor(5,1);
+    lcd.print(TX_frequency * 0.001);
+      
+// Need a 4bit lcd to test these with
+//    lcd.setCursor(0,2);
+//    lcd.print(txt69); // V
+//    BatteryReadValue = analogRead(BatteryReadPin)* BatteryVconvert;
+//    lcd.setCursor(5,2);
+//    lcd.print(BatteryReadValue);
 
-//-----------------------------------------------------------------
-void Band_Splash()
-{
-    if ( bsm == 1 ) 
-    {
-        lcd.setCursor(0, 3);
-        lcd.print(txt65); 
-        lcd.setCursor(6, 3);
-        lcd.print(txt66);
-    }
-    else 
-    {
-        lcd.setCursor(6, 3);
-        lcd.print(txt67);
-    } 
-}   
+//    lcd.setCursor(0,3);
+//   lcd.print(txt70); // S
+//    SmeterReadValue = analogRead(SmeterReadPin);
+//    SmeterReadValue = map(SmeterReadValue, 0, 180, 0, 9);
+//    lcd.setCursor(5,3);
+//    lcd.print(SmeterReadValue);
+ 
+ }
 
 #endif //FEATURE_LCD_4BIT
 
-#ifdef FEATURE_LCD_I2C
+#ifdef FEATURE_LCD_I2C_SSD1306  
 //------------------------Display Stuff below-----------------------------------
-void Display_Refresh()
+void Display_Refresh()  //SSD1306 I2C OLED Version
 {
     bsm = digitalRead(Band_Select); 
      
@@ -1082,9 +1082,44 @@ void Display_Refresh()
  }
 #endif
 
-//---------------------------------------------------------------------------------
-//stuff above is for testing using the Display Comment out if not needed  
-//-----------------------------------------------------------------------------  
+#ifdef FEATURE_LCD_I2C_1602
+
+void Display_Refresh()  //LCD_4Bit Version
+{
+    bsm = digitalRead(Band_Select); 
+     
+    RX_frequency = frequency_tune + IF;
+    TX_frequency = frequency + IF;
+    lcd.clear();   // clears the screen and buffer
+	lcd.setCursor(0,0);
+    lcd.print(txt62); // RX
+    lcd.setCursor(5,0);
+    lcd.print(RX_frequency * 0.001);
+	
+    lcd.setCursor(0,1);	
+    lcd.print(txt68); // TX
+    lcd.setCursor(5,1);
+    lcd.print(TX_frequency * 0.001);
+      
+// Need to test these first...
+//    lcd.setCursor(0,2);
+//    lcd.print(txt69); // V
+//    BatteryReadValue = analogRead(BatteryReadPin)* BatteryVconvert;
+//    lcd.setCursor(5,2);
+//    lcd.print(BatteryReadValue);
+
+//    lcd.setCursor(0,3);
+//    lcd.print(txt70); // S
+//    SmeterReadValue = analogRead(SmeterReadPin);
+//    SmeterReadValue = map(SmeterReadValue, 0, 180, 0, 9);
+//    lcd.setCursor(5,3);
+//    lcd.print(SmeterReadValue);
+ 
+ 
+ }
+#endif //FEATURE_LCD_I2C_1602
+
+//--------------------------------------------------------------------------  
 
 void Step_Flash()
 {
