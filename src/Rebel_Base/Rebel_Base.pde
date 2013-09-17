@@ -296,6 +296,7 @@ const char txt68[4]         = "TX:";
 const char txt69[3]         = "V:";
 const char txt70[3]         = "S:";
 const char txt71[5]         = "WPM:";
+const char txt72[5]         = "PWR:";
 #endif  //FEATURE_DISPLAY
 
 #ifdef FEATURE_LCD_4BIT
@@ -747,7 +748,7 @@ void TX_routine()
     TX_key = digitalRead(TX_Dit);
     if ( TX_key == LOW)         // was high   
     {
-        //   (FREQ_REGISTER_BIT, HIGH) is selected      
+        //   (FREQ_REGISTER_BIT, HIGH) is selected   
         do
         {
             digitalWrite(FREQ_REGISTER_BIT, HIGH);
@@ -755,7 +756,7 @@ void TX_routine()
             digitalWrite(Side_Tone, HIGH);
             TX_key = digitalRead(TX_Dit);
         } while (TX_key == LOW);   // was high 
-
+        //PowerOutReadValue = analogRead(PowerOutReadpin); 
         digitalWrite(TX_OUT, LOW);  // trun off TX
         for (int i=0; i <= 10e3; i++); // delay for maybe some decay on key release
 
@@ -779,6 +780,7 @@ void TX_routine()
     if ( TX_key == LOW)         // was high   
     {
         //   (FREQ_REGISTER_BIT, HIGH) is selected      
+        
         do
         {
             digitalWrite(FREQ_REGISTER_BIT, HIGH);
@@ -787,11 +789,11 @@ void TX_routine()
             TX_key = digitalRead(TX_Dit);
         } while (TX_key == LOW);   // was high 
 
-        digitalWrite(TX_OUT, LOW);  // trun off TX
+        digitalWrite(TX_OUT, LOW);  // turn off TX
         for (int i=0; i <= 10e3; i++); // delay for maybe some decay on key release
-
         digitalWrite(FREQ_REGISTER_BIT, LOW);
         digitalWrite(Side_Tone, LOW);
+        loopStartTime = millis();//Reset the Timer for this loop
     }
  } 
    else {    //If ST_key is not 1, then use IAMBIC
@@ -874,6 +876,7 @@ void TX_routine()
             else {
                 keyerControl &= ~(DAH_L);              // clear dah latch
                 keyerState = IDLE;                     // go idle
+                loopStartTime = millis();//Reset the Timer for this loop
             }
         }
         break;
@@ -917,7 +920,7 @@ void loadWPM(int wpm)
 void checkWPM() //Checks the Keyer speed Pot and updates value
 {
    CWSpeedReadValue = analogRead(CWSpeedReadPin);
-   CWSpeedReadValue = map(CWSpeedReadValue, 0, 1024, 5, 40);
+   CWSpeedReadValue = map(CWSpeedReadValue, 0, 1024, 5, 45);
    loadWPM(CWSpeedReadValue);
 }
 
@@ -996,18 +999,6 @@ void RIT_Read()
         stop_led_off();
     } 
     }
-
-//------------------------------------------------------------------------------  
-
-void led_test()    // used for testing delete when done
-{
-    digitalWrite(13, HIGH);     // set the LED on
-    delay(100);                 // wait for a moment
-
-    digitalWrite(13, LOW);      // set the LED off
-    delay(100);                 // wait for a moment
-}
-
 
 //--------------------Default Frequency-----------------------------------------
 void Default_frequency()
@@ -1093,12 +1084,19 @@ void Display_Refresh()  //SSD1306 I2C OLED Version
     
     display.drawRect(0, 0, display.width(), display.height(), WHITE);
     
+    #ifdef FEATURE_KEYER
     display.setCursor(3,21);	
     display.print(txt71); // WPM
-    display.setCursor(20,21);
+    display.setCursor(30,21);
     display.print(CWSpeedReadValue);
+    #endif
+
+  //  display.setCursor(45,21);	
+  //  display.print(txt72); // PWR
+  //  display.setCursor(70,21);
+  //  display.print(PowerOutReadValue);
+    
     display.display();
- 
  }
 #endif
 
