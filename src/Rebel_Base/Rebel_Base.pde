@@ -230,15 +230,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 //Optional Features
 //#define FEATURE_DISPLAY              // LCD display support (include one of the interface and model options below)
-//#define FEATURE_LCD_4BIT             // Classic LCD display using 4 I/O lines
+//#define FEATURE_LCD_4BIT             // Classic LCD display using 4 I/O lines. **Untested**
 //#define FEATURE_I2C                  // I2C Support
-//#define FEATURE_LCD_I2C_SSD1306      // If using an Adafruit 1306 I2C OLED Display
-//#define FEATURE_LCD_I2C_1602         // 1602 Display with I2C interface.
-//#define FEATURE_CW_DECODER
-//#define FEATURE_KEYER
-//#define FEATURE_BEACON
-//#define FEATURE_SERIAL
-
+//#define FEATURE_LCD_I2C_SSD1306      // If using an Adafruit 1306 I2C OLED Display. Use modified Adafruit libraries found here: github.com/pstyle/Tentec506/tree/master/lib/display  **Working**
+//#define FEATURE_LCD_I2C_1602         // 1602 Display with I2C interface.  Does not work. LiquidCrystal_I2C library issue I think.
+//#define FEATURE_CW_DECODER           // Not implemented yet.
+//#define FEATURE_KEYER                // Keyer based on code from OpenQRP.org. **Working**
+//#define FEATURE_BEACON               // Not implemented yet.
+//#define FEATURE_SERIAL               // Enables serial output.  Only used for debugging at this point.  **Working**
+//#define FEATURE_BANDSWITCH           // Software based Band Switching.  Not implemented yet.
 
 
 const int RitReadPin        = A0;  // pin that the sensor is attached to used for a rit routine later.
@@ -369,6 +369,7 @@ long frequency_default          = 0;
 long fcalc;
 long IF                         = 9.00e6;          //  I.F. Frequency
 
+
 //------------------------------------------------------------
 // Debug Stuff
 unsigned long   loopCount       = 0;
@@ -378,12 +379,13 @@ unsigned int    printCount      = 0;
 
 unsigned long  loopStartTime    = 0;
 unsigned long  loopElapsedTime  = 0;
-float           loopSpeed       = 0;
+float          loopSpeed        = 0;
 
 unsigned long LastFreqWriteTime = 0;
 
+#ifdef FEATURE_SERIAL
 void    serialDump();
-
+#endif
 
 //------------------------------------------------------------
 void Default_frequency();
@@ -483,7 +485,13 @@ void setup()
     Default_Settings();
 
     //---------------------------------------------------------------
-    pinMode (Band_Select,           INPUT);     // select
+#ifndef FEATURE_BANDSWITCH
+    pinMode (Band_Select,           INPUT);     // Band select via Jumpers.
+#endif
+
+#ifdef FEATURE_BANDSWITCH
+    pinMode (Band_Select,           OUTPUT);     // Used to control relays connected to fileter lines.
+#endif
 
     AD9834_init();
     AD9834_reset();                             // low to high
@@ -500,7 +508,7 @@ void setup()
     AD9834_init();
     AD9834_reset();
 
-    //encoder0PinALast = digitalRead(encoder0PinA);
+    encoder0PinALast = digitalRead(encoder0PinA);  
     //attachInterrupt(encoder0PinA, Encoder, CHANGE);
     //attachInterrupt(encoder0PinB, Encoder, CHANGE);
     attachCoreTimerService(TimerOverFlow);//See function at the bottom of the file.
@@ -538,7 +546,9 @@ void setup()
 #endif
 
 #ifdef FEATURE_LCD_I2C_1602  //Initialize I2C 1602 Display
-  lcd.init();                      // initialize the lcd 
+  lcd.begin();                      // initialize the lcd 
+  lcd.backlight();
+  lcd.print("TEN-TEC 506 REBEL");
 #endif
 
 
@@ -644,7 +654,7 @@ void    serialDump()
     Serial.println  ( frequency + IF );
     
     #ifdef FEATURE_KEYER
-    Serial.print    ( txt71 );
+    Serial.print    ( "CW speed:" );
     Serial.println  ( CWSpeedReadValue );
     Serial.println  ();
     #endif
@@ -652,6 +662,7 @@ void    serialDump()
 } // end serialDump()
 #endif //FEATURE_SERIAL
 
+#ifndef FEATURE_BANDSWITCH
 //------------------ Band Select ------------------------------------
 void Band_Set_40_20M()
 {
@@ -671,7 +682,32 @@ void Band_Set_40_20M()
     Default_frequency();
 }
 
+#endif
 
+#ifdef FEATURE_BANDSWITCH
+//------------------ Software Band Select ------------------------------------
+
+void Band_Set_40_20M()
+{
+     
+
+    //  select 40 or 20 meters 1 for 20 0 for 40
+    if ( bsm == 1 ) 
+    { 
+        frequency_default = meter_20;
+        digitalWrite(Band_Select,LOW);
+    }
+    else 
+    { 
+        frequency_default = meter_40; 
+        IF *= -1;               //  HI side injection
+        digitalWrite(Band_Select,HIGN);
+    }
+
+    Default_frequency();
+}
+
+#endif
 
 //--------------------------- Encoder Routine ----------------------------  
 void Encoder()
@@ -696,7 +732,10 @@ void Frequency_up()
     
     Step_Flash();
     
+#ifndef FEATURE_BANDSWITCH
     bsm = digitalRead(Band_Select); 
+#endif
+
      if ( bsm == 1 ) { Band_20_Limit_High(); }
      else if ( bsm == 0 ) {  Band_40_Limit_High(); }
  
@@ -709,7 +748,10 @@ void Frequency_down()
     
     Step_Flash();
     
+#ifndef FEATURE_BANDSWITCH
     bsm = digitalRead(Band_Select); 
+#endif
+
      if ( bsm == 1 ) { Band_20_Limit_Low(); }
      else if ( bsm == 0 ) {  Band_40_Limit_Low(); }
  
@@ -730,7 +772,9 @@ void UpdateFreq(long freq)
 
     program_freq0( freq  );
             
+#ifndef FEATURE_BANDSWITCH
     bsm = digitalRead(Band_Select); 
+#endif
     
     freq1 = freq - RitFreqOffset;  //  to get the TX freq
 
@@ -1015,7 +1059,9 @@ void Default_frequency()
 
 void Display_Refresh()  //LCD_4Bit Version
 {
+#ifndef FEATURE_BANDSWITCH
     bsm = digitalRead(Band_Select); 
+#endif
      
     RX_frequency = frequency_tune + IF;
     TX_frequency = frequency + IF;
@@ -1052,7 +1098,9 @@ void Display_Refresh()  //LCD_4Bit Version
 //------------------------Display Stuff below-----------------------------------
 void Display_Refresh()  //SSD1306 I2C OLED Version
 {
+#ifndef FEATURE_BANDSWITCH
     bsm = digitalRead(Band_Select); 
+#endif
      
     RX_frequency = frequency_tune + IF;
     TX_frequency = frequency + IF;
@@ -1085,6 +1133,7 @@ void Display_Refresh()  //SSD1306 I2C OLED Version
     display.drawRect(0, 0, display.width(), display.height(), WHITE);
     
     #ifdef FEATURE_KEYER
+  
     display.setCursor(3,21);	
     display.print(txt71); // WPM
     display.setCursor(30,21);
@@ -1102,14 +1151,16 @@ void Display_Refresh()  //SSD1306 I2C OLED Version
 
 #ifdef FEATURE_LCD_I2C_1602
 
-void Display_Refresh()  //LCD_4Bit Version
+void Display_Refresh()  //FEATURE_LCD_I2C_1602
 {
+#ifndef FEATURE_BANDSWITCH
     bsm = digitalRead(Band_Select); 
+#endif
      
     RX_frequency = frequency_tune + IF;
     TX_frequency = frequency + IF;
     lcd.clear();   // clears the screen and buffer
-	lcd.setCursor(0,0);
+    lcd.setCursor(0,0);
     lcd.print(txt62); // RX
     lcd.setCursor(5,0);
     lcd.print(RX_frequency * 0.001);
