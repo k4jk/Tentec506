@@ -1057,38 +1057,46 @@ void Default_frequency()
 #ifdef FEATURE_LCD_4BIT
 //------------------------Display Stuff below-----------------------------------
 
-void Display_Refresh()  //LCD_4Bit Version
+void Display_Refresh()  //LCD_4Bit Version - Cleaned up, added more Info and tested. - K4JK
 {
 #ifndef FEATURE_BANDSWITCH
     bsm = digitalRead(Band_Select); 
 #endif
-     
+//QSX    
     RX_frequency = frequency_tune + IF;
     TX_frequency = frequency + IF;
     lcd.clear();   // Clear Display
     lcd.setCursor(0,0);
     lcd.print(txt62); // RX
-    lcd.setCursor(5,0);
+    lcd.setCursor(4,0);
     lcd.print(RX_frequency * 0.001);
-	
+//QRG
     lcd.setCursor(0,1);	
     lcd.print(txt68); // TX
-    lcd.setCursor(5,1);
+    lcd.setCursor(4,1);
     lcd.print(TX_frequency * 0.001);
-      
-// Need a 4bit lcd to test these with
-//    lcd.setCursor(0,2);
-//    lcd.print(txt69); // V
-//    BatteryReadValue = analogRead(BatteryReadPin)* BatteryVconvert;
-//    lcd.setCursor(5,2);
-//    lcd.print(BatteryReadValue);
-
-//    lcd.setCursor(0,3);
-//   lcd.print(txt70); // S
-//    SmeterReadValue = analogRead(SmeterReadPin);
-//    SmeterReadValue = map(SmeterReadValue, 0, 180, 0, 9);
-//    lcd.setCursor(5,3);
-//    lcd.print(SmeterReadValue);
+// DC Volts In
+    lcd.setCursor(0,2);
+    lcd.print(txt69); // V
+    BatteryReadValue = analogRead(BatteryReadPin)* BatteryVconvert;
+    lcd.setCursor(4,2);
+    lcd.print(BatteryReadValue);
+//S Meter 
+    lcd.setCursor(0,3);
+    lcd.print(txt70); // S
+    SmeterReadValue = analogRead(SmeterReadPin);
+    SmeterReadValue = map(SmeterReadValue, 0, 180, 0, 9);
+    lcd.setCursor(4,3);
+    lcd.print(SmeterReadValue);
+// CW Speed - Moved this over past the S meter on the fourth line
+    #ifdef FEATURE_KEYER //Did user enable keyer function?
+      if(ST_key == 0) {  //Did they also plug a paddle in? (or at least NOT plug in a straight key?)
+      lcd.setCursor(11,3);	
+      lcd.print(txt71); // WPM
+      lcd.setCursor(15,3);
+      lcd.print(CWSpeedReadValue);
+      }
+    #endif
  
  }
 
