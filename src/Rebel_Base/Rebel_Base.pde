@@ -180,16 +180,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
   
   73, James - K4JK
   */
-  
-/* September 22, 2013. Added simple beacon routine and changed the analog speed control to be a defined feature.
-    Also added way to set CW speed manually if you don't build a speed control circuit. Remember to uncomment
-    features you want to use.
-    
-    Also changed the 4 bit diplay code to write "Beacon Mode" when Rebel is in beacon mode. This will only work
-    on a 4 line disply.
-    
-    James - K4JK
-*/
+
+/* September 22, 2013. (PA3ANG) Added Beacon. Can be activated by entering U3 in USER menu. 
+  Remember to adjust to the beacon frequency before.
+  The beacon is activated by selecting U3 en leaving the USER menu!
+  The beacon can be stopped by unselecting U3 during the delay.
+  The speed and delay can be adjusted in the setup area.
+  Make sure to change the beacon text before you compile.
+  */
   
   
 // various defines
@@ -246,7 +244,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //#define FEATURE_LCD_I2C_1602         // 1602 Display with I2C backpack interface. Mine required pull-up resistors (2.7k) on SDA/SCL **WORKING**
 //#define FEATURE_CW_DECODER           // Not implemented yet.
 #define FEATURE_KEYER                // Keyer based on code from OpenQRP.org. **Working**
-//#define FEATURE_BEACON               // Beacon Feature. Don't implement with keyer feature. **Working**
+//#define FEATURE_BEACON               // Use USER Menu 3 to Activate.  Make sure to change the Beacon text below! **Working**
 //#define FEATURE_SERIAL               // Enables serial output.  Only used for debugging at this point.  **Working**
 //#define FEATURE_BANDSWITCH           // Software based Band Switching.  Not implemented yet.
 //#define FEATURE_SPEEDCONTROL         //Analog speed control (uses onboard trimpot connected to A7) **Working**
@@ -274,16 +272,65 @@ int CWSpeedReadValue        = 0;
 unsigned long       ditTime;                    // No. milliseconds per dit
 
 #ifdef FEATURE_BEACON
-int i = 0; //For beacon loop
+// Simple Arduino CW Beacon Keyer
+// Written by Mark VandeWettering K6HX
 
-//--------------------------############  SETUP BEACON HERE  ###############-------------------------------
-char BeaconMessage[30] = "VVV"; // <-- Put Beacon Message here IN ALL CAPS, between quotes, max 30 characters.                                            //Only Letters, numbers, '.', '@', '/' and spaces
-int BeaconInterval = 5;  // <-- Set Beacon Interval in Seconds (Time between beacon transmissions)
-//End of Beacon Setup
+#define     BEACON          ("PA3ANG/BEACON JO32AM")           // Beacon text 
+#define     CW_SPEED        20                                 // Beacon Speed    
+#define     BEACON_DELAY    10                                 // in seconds
+#define     N_MORSE  (sizeof(morsetab)/sizeof(morsetab[0]))    // Morse Table
+#define     DOTLEN   (1200/CW_SPEED)                           // No. milliseconds per dit
+#define     DASHLEN  (3*(1200/CW_SPEED))                       // CW weight  3.5 / 1   !! was 3.5*
 
+unsigned long  beaconStartTime    = 0;
+unsigned long  beaconElapsedTime  = 0;
 
-int BeaconLength = strlen(BeaconMessage); //Get length of array so that we know when we have sent all characters in the message
-#endif //FEATURE_BEACON
+// Morse table
+struct t_mtab { char c, pat; } ;
+struct t_mtab morsetab[] = {
+  	{'.', 106},
+	{',', 115},
+	{'?', 76},
+	{'/', 41},
+	{'A', 6},
+	{'B', 17},
+	{'C', 21},
+	{'D', 9},
+	{'E', 2},
+	{'F', 20},
+	{'G', 11},
+	{'H', 16},
+	{'I', 4},
+	{'J', 30},
+	{'K', 13},
+	{'L', 18},
+	{'M', 7},
+	{'N', 5},
+	{'O', 15},
+	{'P', 22},
+	{'Q', 27},
+	{'R', 10},
+	{'S', 8},
+	{'T', 3},
+	{'U', 12},
+	{'V', 24},
+	{'W', 14},
+	{'X', 25},
+	{'Y', 29},
+	{'Z', 19},
+	{'1', 62},
+	{'2', 60},
+	{'3', 56},
+	{'4', 48},
+	{'5', 32},
+	{'6', 33},
+	{'7', 35},
+	{'8', 39},
+	{'9', 47},
+	{'0', 63}
+} ;
+
+#endif  // FEATURE_BEACON
 
 #ifndef FEATURE_SPEEDCONTROL
 //-----------############  SET CW SPEED HERE (If you dont use the analog control)  #######-------------
@@ -638,14 +685,33 @@ void loop()     //
     frequency_tune  = frequency + RitFreqOffset;
     UpdateFreq(frequency_tune);
 
+    TX_routine();
+	
     #ifdef FEATURE_BEACON
-    Beacon_Routine();
+    if ( Selected_Other == 2 ) 
+    {
+      beaconElapsedTime = millis() - beaconStartTime; 
+      if( (BEACON_DELAY *1000) <= beaconElapsedTime )
+      {
+        #ifdef FEATURE_LCD_4BIT
+          TX_frequency = frequency + IF;
+          lcd.setCursor(0,1);
+          lcd.print(txt68); // TX
+          lcd.setCursor(4,1);
+          lcd.print(TX_frequency * 0.001);
+          lcd.setCursor(14,1);
+          lcd.print(txt81);
+        #endif
+        sendmsg(BEACON);
+        beaconStartTime = millis();  //Reset the Timer for the beacon loop
+        #ifdef FEATURE_LCD_4BIT
+          lcd.setCursor(14,1);
+          lcd.print(txt82);
+        #endif
+      }
+    }
     #endif
     
-    #ifndef FEATURE_BEACON
-    TX_routine();
-    #endif
-
     loopCount++;
     loopElapsedTime    = millis() - loopStartTime;    // comment this out to remove the one second tick
     
@@ -1014,463 +1080,59 @@ void checkWPM() //Assign Speed manually
 }
 #endif
 
-//--------------------------------------------BEACON ROUTINE -----------------------------------
-//----------------------------------------------------------------------------------------------
-//Here is my kludgy beacon routine. The variable 'i' is global because I don't want to go into a
-//second loop for the whole beacon transmission that would take time away from the main loop. This 
-//way the main loop is executed between characters instead of only at the end of every beacon 
-//transmission sequence. There is probably a better way to handle pauses between transmissions, but 
-//for now I go into a for loop that calls delay(), DisplayRefresh() and checkWPM(). - K4JK
-//-----------------------------------------------------------------------------------------------
 #ifdef FEATURE_BEACON
-void Beacon_Routine()
-{
-   
-     if (millis() > 6000) //Pause before beginning transmission to let the Rebel boot up.
-     {  
-       checkWPM();
-       switch (BeaconMessage[i]) 
-         {
-          case 'A':
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break;
-          case 'B':
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break; 
-          case 'C':
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break; 
-          case 'D':
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break;             
-           case 'E':
-            Send_DIT();
-            delay(ditTime*3);
-            break;
-          case 'F':
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break;
-          case 'G':
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break;     
-          case 'H':
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break;
-          case 'I':
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break;     
-          case 'J':
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break;  
-          case 'K':
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break; 
-          case 'L':
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break;   
-          case 'M':
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break; 
-          case 'N':
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break; 
-          case 'O':
-            Send_DAH();
-            delay(ditTime);            
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break;  
-          case 'P':
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break; 
-          case 'Q':
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break; 
-          case 'R':
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break;  
-          case 'S':
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break; 
-          case 'T':
-            Send_DAH();
-            delay(ditTime*3);
-            break;  
-          case 'U':
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break;         
-          case 'V':
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break;         
-          case 'W':
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break;        
-          case 'X':
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break;        
-          case 'Y':
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break;        
-          case 'Z':
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break;
-          case ' ':
-            delay(ditTime*7);
-            break;
-          case '0':
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break;            
-           case '1':
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break;             
-          case '2':
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break;            
-          case '3':
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break;            
-          case '4':
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break;             
-          case '5':
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break;             
-          case '6':
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break;             
-          case '7':
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break;             
-          case '8':
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break;            
-          case '9':
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break;
-          case '/':
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break;
-          case '.':
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            break;
-            Send_DAH();
-            delay(ditTime*3);
-          case '@':
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime*3);
-            break;
-          case '=':
-            Send_DAH();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DIT();
-            delay(ditTime);
-            Send_DAH();
-            delay(ditTime*3);
-            break;            
-        }
-      if (i <= BeaconLength)
-         {
-           i++;
-         }
-      else
-         { 
-           i = 0;
-           int MsgEndTime = millis();
-           for(int a=0; a<=BeaconInterval; a++)
-             {
-               checkWPM();
-               #ifdef FEATURE_DISPLAY
-               Display_Refresh();
-               #endif
-               delay(1000);
-             }
-         }
-     }
-     else
-     {
-       checkWPM();
-     }
-}
-//Beacon keying Functions
-void Send_DIT()
-{
-   digitalWrite(FREQ_REGISTER_BIT, HIGH);
-   digitalWrite(TX_OUT, HIGH);         // key the line
-   digitalWrite(Side_Tone, HIGH);      // Tone
-   delay(ditTime);
-   digitalWrite(TX_OUT, LOW);      // turn the key off
-   for (int i=0; i <= 10e3; i++); // delay for maybe some decay on key release
-   digitalWrite(FREQ_REGISTER_BIT, LOW);
-   digitalWrite(Side_Tone, LOW);
-   
-}
-void Send_DAH()
-{
-   digitalWrite(FREQ_REGISTER_BIT, HIGH);
-   digitalWrite(TX_OUT, HIGH);         // key the line
-   digitalWrite(Side_Tone, HIGH);      // Tone
-   delay(ditTime * 3);
-   digitalWrite(TX_OUT, LOW);      // turn the key off
-   for (int i=0; i <= 10e3; i++); // delay for maybe some decay on key release
-   digitalWrite(FREQ_REGISTER_BIT, LOW);
-   digitalWrite(Side_Tone, LOW);
-   
+
+// CW generation routines for Beacon and Memory 
+void key(int LENGTH) {
+  digitalWrite(FREQ_REGISTER_BIT, HIGH);
+  digitalWrite(TX_OUT, HIGH);          // key the line
+  digitalWrite(Side_Tone, HIGH);       // Tone
+  delay(LENGTH);
+  digitalWrite(TX_OUT, LOW);           // turn the key off
+  //for (int i=0; i <= 10e3; i++);       // delay for maybe some decay on key release
+  digitalWrite(FREQ_REGISTER_BIT, LOW);
+  digitalWrite(Side_Tone, LOW);
+  delay(DOTLEN) ;
 }
 
-#endif  //FEATURE_BEACON
+void send(char c) {
+  int i ;
+  if (c == ' ') {
+    delay(7*DOTLEN) ;
+    return ;
+  }
+  if (c == '+') {
+    delay(4*DOTLEN) ; 
+    key(DOTLEN);
+    key(DASHLEN);
+    key(DOTLEN);
+    key(DASHLEN);
+    key(DOTLEN);
+    delay(4*DOTLEN) ; 
+    return ;
+  }    
+    
+  for (i=0; i<N_MORSE; i++) {
+    if (morsetab[i].c == c) {
+      unsigned char p = morsetab[i].pat ;
+      while (p != 1) {
+          if (p & 1)
+            key(DASHLEN) ;
+          else
+            key(DOTLEN) ;
+          p = p / 2 ;
+          }
+      delay(2*DOTLEN) ;
+      return ;
+      }
+  }
+}
+
+void sendmsg(char *str) {
+  while (*str)
+    send(*str++) ;
+}
+#endif FEATURE_BEACON
 //----------------------------------------------------------------------------
 void RIT_Read()
 {
@@ -1565,55 +1227,61 @@ void Display_Refresh()  //LCD_4Bit Version - Cleaned up, added more Info and tes
 #ifndef FEATURE_BANDSWITCH
     bsm = digitalRead(Band_Select); 
 #endif
+//BAND Info top line
+    if ( bsm == 1 ) 
+    {
+        lcd.setCursor(17, 0);
+        lcd.print(txt66);
+    }
+    else 
+    {
+        lcd.setCursor(17, 0);
+        lcd.print(txt67);
+    } 
 //QSX    
     RX_frequency = frequency_tune + IF;
     TX_frequency = frequency + IF;
-    lcd.clear();   // Clear Display
-    lcd.setCursor(0,0);
+    //lcd.clear();   // Clear Display
+    lcd.setCursor(0,1);
     lcd.print(txt62); // RX
-    lcd.setCursor(4,0);
-    lcd.print(RX_frequency * 0.001);
-//QRG
-    lcd.setCursor(0,1);	
-    lcd.print(txt68); // TX
     lcd.setCursor(4,1);
-    lcd.print(TX_frequency * 0.001);
+    lcd.print(RX_frequency * 0.001);
+//RIT
+    lcd.setCursor(14, 1);
+    lcd.print("     ");
+    if (RitFreqOffset < 0) {
+      lcd.setCursor(14, 1);
+    } else {
+      lcd.setCursor(15, 1);
+    }      
+    lcd.print(RitFreqOffset);
+//QRG
+    //lcd.setCursor(0,1);	
+    //lcd.print(txt68); // TX
+    //lcd.setCursor(4,1);
+    //lcd.print(TX_frequency * 0.001);
 // DC Volts In
     lcd.setCursor(0,2);
     lcd.print(txt69); // V
     BatteryReadValue = analogRead(BatteryReadPin)* BatteryVconvert;
     lcd.setCursor(4,2);
     lcd.print(BatteryReadValue);
-//S Meter or Beacon. Print "Beacon" if in Beacon Mode
-  //Beacon
-   #ifdef FEATURE_BEACON
-    lcd.setCursor(0,3);
-    lcd.print(txt73); // Beacon!
-   #endif
-   #ifndef FEATURE_BEACON
-   //S Meter 
+//S Meter 
     lcd.setCursor(0,3);
     lcd.print(txt70); // S
     SmeterReadValue = analogRead(SmeterReadPin);
     SmeterReadValue = map(SmeterReadValue, 0, 180, 0, 9);
     lcd.setCursor(4,3);
     lcd.print(SmeterReadValue);
-   #endif
 // CW Speed - Moved this over past the S meter on the fourth line
     #ifdef FEATURE_KEYER //Did user enable keyer function?
       if(ST_key == 0) {  //Did they also plug a paddle in? (or at least NOT plug in a straight key?)
-      lcd.setCursor(8,3);	
+      lcd.setCursor(11,3);	
       lcd.print(txt71); // WPM
-      lcd.setCursor(12,3);
+      lcd.setCursor(15,3);
       lcd.print(CWSpeedReadValue);
       }
     #endif
-    #ifdef FEATURE_BEACON //Did user enable Beacon function?
-      lcd.setCursor(8,3);	
-      lcd.print(txt71); // WPM
-      lcd.setCursor(12,3);
-      lcd.print(CWSpeedReadValue);
-    #endif    
  
  }
 
@@ -1999,7 +1667,12 @@ void Other_2()      //  User Defined Control Software
 //----------------------------------------------------------------------------------  
 void Other_3()       //  User Defined Control Software
 {
-    Selected_Other = Other_3_user; 
+    #ifdef FEATURE_BEACON
+	// Place Rebel into BEACON mode
+    beaconStartTime = millis() - ((BEACON_DELAY-2)*1000);  //Start Beacon after 2 seconds leaving the USER menu
+	#endif
+	
+	Selected_Other = Other_3_user;
 }
 
 //-----------------------------------------------------------------------------
