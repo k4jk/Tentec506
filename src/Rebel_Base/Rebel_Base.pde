@@ -546,9 +546,14 @@ void setup()
 #endif
 
 #ifdef FEATURE_LCD_I2C_1602  //Initialize I2C 1602 Display
-  lcd.begin();                      // initialize the lcd 
+  lcd.init();                      // initialize the lcd 
   lcd.backlight();
-  lcd.print("TEN-TEC 506 REBEL");
+  lcd.setCursor(4,0);
+  lcd.print("TEN-TEC");
+  lcd.setCursor(3,1);
+  lcd.print("506 REBEL");
+  delay(2000);
+  lcd.clear();   // Clear Display
 #endif
 
 
@@ -1140,12 +1145,13 @@ void Display_Refresh()  //SSD1306 I2C OLED Version
     
     display.drawRect(0, 0, display.width(), display.height(), WHITE);
     
-    #ifdef FEATURE_KEYER
-  
-    display.setCursor(3,21);	
+    #ifdef FEATURE_KEYER  //Did user enable keyer function?
+      if(ST_key == 0) {   //Did they also plug a paddle in? (or at least NOT plug in a straight key?)
+    display.setCursor(3,21);
     display.print(txt71); // WPM
     display.setCursor(30,21);
     display.print(CWSpeedReadValue);
+      }
     #endif
 
   //  display.setCursor(45,21);	
@@ -1159,39 +1165,48 @@ void Display_Refresh()  //SSD1306 I2C OLED Version
 
 #ifdef FEATURE_LCD_I2C_1602
 
-void Display_Refresh()  //FEATURE_LCD_I2C_1602
+//------------------------Display Stuff below-----------------------------------
+
+void Display_Refresh()  //LCD_I2C_1602 version
 {
 #ifndef FEATURE_BANDSWITCH
     bsm = digitalRead(Band_Select); 
 #endif
-     
+//QSX    
     RX_frequency = frequency_tune + IF;
     TX_frequency = frequency + IF;
-    lcd.clear();   // clears the screen and buffer
+    //lcd.clear();   // Clear Display
     lcd.setCursor(0,0);
-    lcd.print(txt62); // RX
-    lcd.setCursor(5,0);
+    lcd.print("R:"); // RX
+    lcd.setCursor(2,0);
     lcd.print(RX_frequency * 0.001);
-	
+//QRG
     lcd.setCursor(0,1);	
-    lcd.print(txt68); // TX
-    lcd.setCursor(5,1);
+    lcd.print("T:"); // TX
+    lcd.setCursor(2,1);
     lcd.print(TX_frequency * 0.001);
-      
-// Need to test these first...
-//    lcd.setCursor(0,2);
-//    lcd.print(txt69); // V
-//    BatteryReadValue = analogRead(BatteryReadPin)* BatteryVconvert;
-//    lcd.setCursor(5,2);
-//    lcd.print(BatteryReadValue);
-
-//    lcd.setCursor(0,3);
-//    lcd.print(txt70); // S
-//    SmeterReadValue = analogRead(SmeterReadPin);
-//    SmeterReadValue = map(SmeterReadValue, 0, 180, 0, 9);
-//    lcd.setCursor(5,3);
-//    lcd.print(SmeterReadValue);
- 
+// DC Volts In
+    lcd.setCursor(10,0);
+    lcd.print(txt69); // V
+    BatteryReadValue = analogRead(BatteryReadPin)* BatteryVconvert;
+    lcd.setCursor(12,0);
+    lcd.print(BatteryReadValue);
+//S Meter 
+    lcd.setCursor(10,1);
+    lcd.print("S"); // S
+    SmeterReadValue = analogRead(SmeterReadPin);
+    SmeterReadValue = map(SmeterReadValue, 0, 180, 0, 9);
+    lcd.setCursor(11,1);
+    lcd.print(SmeterReadValue);
+// CW Speed - Moved this over past the S meter on the 2nd line
+    #ifdef FEATURE_KEYER //Did user enable keyer function?
+      if(ST_key == 0) {  //Did they also plug a paddle in? (or at least NOT plug in a straight key?)
+      lcd.setCursor(13,1);	
+      lcd.print("W"); // WPM
+      lcd.setCursor(14,1);
+      lcd.print(CWSpeedReadValue);
+      }
+    #endif
  
  }
 #endif //FEATURE_LCD_I2C_1602
