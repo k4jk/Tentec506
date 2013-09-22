@@ -243,13 +243,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //#define FEATURE_LCD_4BIT             // Classic LCD display using 4 I/O lines. **Working**
 //#define FEATURE_I2C                  // I2C Support
 //#define FEATURE_LCD_I2C_SSD1306      // If using an Adafruit 1306 I2C OLED Display. Use modified Adafruit libraries found here: github.com/pstyle/Tentec506/tree/master/lib/display  **Working**
-//#define FEATURE_LCD_I2C_1602         // 1602 Display with I2C interface.  Does not work. LiquidCrystal_I2C library issue I think.
+//#define FEATURE_LCD_I2C_1602         // 1602 Display with I2C backpack interface. Mine required pull-up resistors (2.7k) on SDA/SCL **WORKING**
 //#define FEATURE_CW_DECODER           // Not implemented yet.
 #define FEATURE_KEYER                // Keyer based on code from OpenQRP.org. **Working**
 //#define FEATURE_BEACON               // Beacon Feature. Don't implement with keyer feature. **Working**
 //#define FEATURE_SERIAL               // Enables serial output.  Only used for debugging at this point.  **Working**
 //#define FEATURE_BANDSWITCH           // Software based Band Switching.  Not implemented yet.
-//#define FEATURE_SPEEDCONTROL         //Analog speed control (must build simple circuit off A7, use 5k or 10k trim pot) **Working**
+//#define FEATURE_SPEEDCONTROL         //Analog speed control (uses onboard trimpot connected to A7) **Working**
 
 
 const int RitReadPin        = A0;  // pin that the sensor is attached to used for a rit routine later.
