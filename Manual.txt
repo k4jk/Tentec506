@@ -1,0 +1,48 @@
+Thanks for trying out this software for the TenTec 506 Rebel.
+
+Coders:
+
+Paul Martin, KD8FJO 
+James Kirkham, K4JK
+
+github: https://github.com/pstyle/Tentec506
+
+A few features that have been added:
+
+A simple Iambic keyer
+A beacon mode
+More display support 
+Support for a simple analog CW speed control (you must build a simple circuit for this)
+
+All of these features can be enabled or disabled by uncommenting or commenting #define statements near the top of the program.
+
+For example, to enable the beacon feature, you would remove the slashes before //#define FEATURE_BEACON, and add slashes before the #define FEATURE_KEYER so they look like this:
+
+//#define FEATURE_KEYER
+#define FEATURE_BEACON
+
+To enable a display, uncomment the FEATURE_DISPLAY line and one of the corresponding display types.
+Example:
+
+#define FEATURE_DISPLAY            
+#define FEATURE_LCD_4BIT 
+
+
+### The Keyer ###
+
+The keyer is set to IAMBIC B by default but can be changed. It will also detect a straight key at startup. So if you want to pound away in a SKCC event, just plug in a straight key before you turn the rig on and the keyer feature will be disabled.
+
+If you want to simulate a straight key with one lever of a paddle, just hold down one of the paddle levers while turning the rig on. After the rig boots you can use the dit lever as if it were a straight key.
+
+###Keying  Speed Control###
+
+Enable the analog speed control feature by uncommenting the #define statement.  To build the circuit, simply hook up a 5k (or maybe 10k) trim pot you can get from radio shack or one of the ebay sellers. The trim lead should go to A7 and positive and negative hooked up the normal way. (5V DC)
+
+If you don't care to mess around with this, you can set your CW speed in the code. Find the line under the comment "SET CW SPEED HERE" and set "ManualCWSpeed" to whatever WPM you want. (default is 15)
+
+###Beacon###
+Set the beacon message in the code under the "SETUP BEACON HERE" comment. Use all CAPS and only numbers, '.', '/', '@', '='. You can also change the delay between transmissions.
+
+
+
+MORE TO COME
