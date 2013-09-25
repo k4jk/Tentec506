@@ -41,8 +41,8 @@ Enable the analog speed control feature by uncommenting the #define statement.  
 
 If you don't care to mess around with this, you can set your CW speed in the code. Find the line under the comment "SET CW SPEED HERE" and set "ManualCWSpeed" to whatever WPM you want. (default is 15)
 
-You can also change the speed by selecting user option #2, and using the paddle to increase or decrease the keyer speed.
-Hit the dit lever to increase speed, and the dah lever to decrease speed. You can also hold the lever down to rapidly increase or decrease.
+You can also change the speed by selecting user option #2, (U2) and using the paddle to increase or decrease the keyer speed.
+Hit the dit lever to increase speed, and the dah lever to decrease speed. You can also hold the lever down to rapidly increase or decrease. After you get the speed you want, exit user option #2 to go back into TX/RX mode. This is important as the transmitted is disabled whle the rig is in user option #2.
 
 ###Beacon###
 Set the beacon message in the code at the group of #defines for the beacon feature.. Use all CAPS and only numbers, '.',  '/',  '.', '?'. You can also change the delay between transmissions.
