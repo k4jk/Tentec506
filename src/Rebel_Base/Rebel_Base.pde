@@ -275,7 +275,7 @@ unsigned long       ditTime;                    // No. milliseconds per dit
 // Simple Arduino CW Beacon Keyer
 // Written by Mark VandeWettering K6HX
 
-#define     BEACON          ("PA3ANG/BEACON JO32AM")           // Beacon text 
+#define     BEACON          ("VVV")           // Beacon text 
 #define     CW_SPEED        20                                 // Beacon Speed    
 #define     BEACON_DELAY    10                                 // in seconds
 #define     N_MORSE  (sizeof(morsetab)/sizeof(morsetab[0]))    // Morse Table
@@ -684,7 +684,18 @@ void loop()     //
 
     frequency_tune  = frequency + RitFreqOffset;
     UpdateFreq(frequency_tune);
-
+    
+    #ifdef FEATURE_KEYER
+    #ifndef FEATURE_SPEEDCONTROL
+    
+    while ( Selected_Other == 1 && Step_Multi_Function_Button1 == 2)    //Is user in User menu option #2?
+    {
+        PaddleChangeWPM();      //Run Change Routine
+        Multi_Function();       //Must run MultiFunction code to detect when user exits either User mode (right button) or user option 2 (left button)
+    }
+    #endif
+    #endif
+    
     TX_routine();
 	
     #ifdef FEATURE_BEACON
@@ -1079,6 +1090,39 @@ void checkWPM() //Assign Speed manually
   loadWPM(CWSpeedReadValue);
 }
 #endif
+
+
+//Routine to change CW speed when User mode option #2 is selected. Dit will increase speed, dah will decrease. 
+//Either can be held down for rapid change. This is called from main loop() function.
+
+void PaddleChangeWPM()                                
+{
+  if (digitalRead(TX_Dit) == LOW)      //Dit?
+  {
+    ManualCWSpeed ++;                  //Increase
+    digitalWrite(Side_Tone, HIGH);     //Some side tone to let user know it's working
+    delay(ditTime);                    //Make dit length normal
+    digitalWrite(Side_Tone, LOW);      //Stop tone
+    checkWPM();                        //Call function that updates key speed
+    #ifdef FEATURE_DISPLAY
+      Display_Refresh();               //Refresh display if enabled to show that speed is changing
+    #endif
+    delay(ditTime * 3);                //Delay between elements in case key is held down
+  }
+  else if (digitalRead(TX_Dah) == LOW)    //Dah?
+  {
+    ManualCWSpeed --;                     //Decrease
+    digitalWrite(Side_Tone, HIGH);        //Some side tone to let user know it's working
+    delay(ditTime * 3);                   //Make dah length normal
+    digitalWrite(Side_Tone, LOW);         //Stop tone
+    checkWPM();                           //Call function that updates key speed
+    #ifdef FEATURE_DISPLAY
+      Display_Refresh();                  //Refresh display if enabled to show that speed is changing
+    #endif
+    delay(ditTime * 3);                   //Delay between elements in case key is held down
+  }
+}
+
 
 #ifdef FEATURE_BEACON
 
