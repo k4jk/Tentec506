@@ -188,7 +188,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
   The speed and delay can be adjusted in the setup area.
   Make sure to change the beacon text before you compile.
   */
-  
+/* September 29, 2013. (KD8FJO) Added support for Nokia 5110 Display
+   pin 30 - Serial clock out (SCLK)
+   pin 29 - Serial data out (DIN)
+   pin 28 - Data/Command select (D/C)
+   pin 27 - LCD chip select (CS)
+   pin 26 - LCD reset (RST)
+  */
   
 // various defines
 #define SDATA_BIT                           10          //  keep!
@@ -241,6 +247,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //#define FEATURE_LCD_4BIT             // Classic LCD display using 4 I/O lines. **Working**
 //#define FEATURE_I2C                  // I2C Support
 //#define FEATURE_LCD_I2C_SSD1306      // If using an Adafruit 1306 I2C OLED Display. Use modified Adafruit libraries found here: github.com/pstyle/Tentec506/tree/master/lib/display  **Working**
+//#define FEATURE_LCD_NOKIA5110        // If using a NOKIA5110 Display. Use modified Adafruit libraries found here: github.com/pstyle/Tentec506/tree/master/lib/display  **Working**
 //#define FEATURE_LCD_I2C_1602         // 1602 Display with I2C backpack interface. Mine required pull-up resistors (2.7k) on SDA/SCL **WORKING**
 //#define FEATURE_CW_DECODER           // Not implemented yet.
 #define FEATURE_KEYER                // Keyer based on code from OpenQRP.org. **Working**
@@ -391,6 +398,18 @@ LiquidCrystal lcd(26, 27, 28, 29, 30, 31);      //  LCD Stuff
 #define OLED_RESET 4
 Adafruit_SSD1306 display(OLED_RESET);
 #endif //SSD1306
+
+#ifdef FEATURE_LCD_NOKIA5110  
+#include <Adafruit_GFX.h>
+#include <Adafruit_PCD8544.h>
+
+// pin 30 - Serial clock out (SCLK)
+// pin 29 - Serial data out (DIN)
+// pin 28 - Data/Command select (D/C)
+// pin 27 - LCD chip select (CS)
+// pin 26 - LCD reset (RST)
+Adafruit_PCD8544 display = Adafruit_PCD8544(30, 29, 28, 27, 26);
+#endif //NOKIA5110
 
 #ifdef FEATURE_LCD_I2C_1602  
 #include <LiquidCrystal_I2C.h>
@@ -617,6 +636,16 @@ void setup()
 #ifdef FEATURE_LCD_I2C_SSD1306	//Initialize SSD1306 Display
   // by default, we'll generate the high voltage from the 3.3v line internally! (neat!)
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x32)
+  display.display(); // show splashscreen
+  delay(2000);
+  display.clearDisplay();   // clears the screen and buffer
+#endif
+
+#ifdef FEATURE_LCD_NOKIA5110	//Initialize NOKIA5110 Display
+  display.begin();  // init done 
+  // you can change the contrast around to adapt the display
+  // for the best viewing!
+  display.setContrast(55);
   display.display(); // show splashscreen
   delay(2000);
   display.clearDisplay();   // clears the screen and buffer
@@ -1330,6 +1359,63 @@ void Display_Refresh()  //SSD1306 I2C OLED Version
     display.setCursor(3,21);
     display.print(txt71); // WPM
     display.setCursor(30,21);
+    display.print(CWSpeedReadValue);
+      }
+    #endif
+
+  //  display.setCursor(45,21);	
+  //  display.print(txt72); // PWR
+  //  display.setCursor(70,21);
+  //  display.print(PowerOutReadValue);
+    
+    display.display();
+ }
+#endif
+
+#ifdef FEATURE_LCD_NOKIA5110  
+//------------------------Display Stuff below-----------------------------------
+void Display_Refresh()  //NOKIA5110  Version
+{
+#ifndef FEATURE_BANDSWITCH
+    bsm = digitalRead(Band_Select); 
+#endif
+     
+    RX_frequency = frequency_tune + IF;
+    TX_frequency = frequency + IF;
+    display.clearDisplay();   // clears the screen and buffer
+    display.setTextSize(1);
+    display.setTextColor(BLACK);
+    display.setCursor(3,3);
+    display.print(txt62); // RX
+    display.setCursor(20,3);
+    display.print(RX_frequency * 0.001);
+	
+    display.setCursor(3,12);
+    display.setTextSize(1);	
+    display.print(txt68); // TX
+    display.setCursor(20,12);
+    display.print(TX_frequency * 0.001);
+      
+    display.setCursor(3,21);
+    display.print(txt69); // V
+    BatteryReadValue = analogRead(BatteryReadPin)* BatteryVconvert;
+    display.setCursor(15,21);
+    display.print(BatteryReadValue);
+
+    display.setCursor(50,21);
+    display.print(txt70); // S
+    SmeterReadValue = analogRead(SmeterReadPin);
+    SmeterReadValue = map(SmeterReadValue, 0, 180, 0, 9);
+    display.setCursor(65,21);
+    display.print(SmeterReadValue);
+    
+    display.drawRect(0, 0, display.width(), display.height(), BLACK);
+    
+    #ifdef FEATURE_KEYER  //Did user enable keyer function?
+      if(ST_key == 0) {   //Did they also plug a paddle in? (or at least NOT plug in a straight key?)
+    display.setCursor(3,39);
+    display.print(txt71); // WPM
+    display.setCursor(30,39);
     display.print(CWSpeedReadValue);
       }
     #endif
