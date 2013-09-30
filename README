@@ -11,9 +11,9 @@ github: https://github.com/pstyle/Tentec506
 A few features that have been added:
 
 A simple Iambic keyer
-A beacon mode
-More display support 
-Support for a simple analog CW speed control (you must build a simple circuit for this)
+A beacon mode  (Change your beacon text in src before compiling.)
+More display support   (Currently supports 4Bit LCDs, Adafruit I2C SSD1306 based OLEDs, Nokia 5110 Displays, and 1602 diplays with an I2C backpack)
+Support for a simple analog CW speed control (Using the onboard CW speed trim pot)
 
 All of these features can be enabled or disabled by uncommenting or commenting #define statements near the top of the program.
 
