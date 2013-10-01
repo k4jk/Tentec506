@@ -198,6 +198,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 /* September 23, 2013. (PA3ANG) Added enter frequency using Serial
   Limited to frequeny in kHz using 5 caracters  e.g. 07020 (7020.00) 14023  (14023.00)
   */
+  
+/* September 26, 2013 (AC0HY) 
+  Changed Multi_Function() and Selection() to debounce switches. And commented out
+  some unnecessary short delays. Reversed speed pot in checkWPM(). wpm
+  */
 
 // various defines
 #define SDATA_BIT                           10          //  keep!
@@ -254,7 +259,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //#define FEATURE_CW_DECODER           // Not implemented yet.
 #define FEATURE_KEYER                // Keyer based on code from OpenQRP.org. **Working**
 #define FEATURE_BEACON               // Send beacon message design Mark VandeWettering K6HX.
-//#define FEATURE_SERIAL               // Enables serial output.  Only used for debugging at this point.  **Working**
+#define FEATURE_SERIAL               // Enables serial output.  Only used for debugging at this point.  **Working**
 //#define FEATURE_BANDSWITCH           // Software based Band Switching.  Not implemented yet.
 #define FEATURE_SERIAL_CONTROL           // Enables serial input of frequency.
 
@@ -301,7 +306,7 @@ enum KSTYPE {IDLE, CHK_DIT, CHK_DAH, KEYED_PREP, KEYED, INTER_ELEMENT };
 // Simple Arduino CW Beacon Keyer
 // Written by Mark VandeWettering K6HX
 
-#define     BEACON_MESSAGE  "PA3ANG/BEACON using TENTEC REBEL" // Beacon text
+#define     BEACON_MESSAGE  "AC0HY/BEACON using TENTEC REBEL"  // Beacon text
 #define     CW_SPEED        20                                 // Beacon Speed    
 #define     BEACON_DELAY    10                                 // in seconds
 #define     N_MORSE  (sizeof(morsetab)/sizeof(morsetab[0]))    // Morse Table
@@ -1142,7 +1147,7 @@ void loadWPM(int wpm)
 void checkWPM() //Checks the Keyer speed Pot and updates value
 {
    CWSpeedReadValue = analogRead(CWSpeedReadPin);
-   CWSpeedReadValue = map(CWSpeedReadValue, 0, 1024, 5, 45);
+   CWSpeedReadValue = map(CWSpeedReadValue, 1024, 0, 5, 45);
    loadWPM(CWSpeedReadValue);
 }
 
@@ -1508,10 +1513,19 @@ void Multi_Function() // The right most pushbutton for BW, Step, Other
 {
     Step_Multi_Function_Button = digitalRead(Multi_Function_Button);
     if (Step_Multi_Function_Button == HIGH) 
-    {   
-       while( digitalRead(Multi_Function_Button) == HIGH ){ }  // added for testing
-        for (int i=0; i <= 150e3; i++); // short delay
-
+    {  
+       // Debounce start
+       unsigned long time;
+       unsigned long start_time;
+      
+       time = millis(); 
+       while( digitalRead(Multi_Function_Button) == HIGH ){ 
+         start_time = time;
+         while( (time - start_time) < 7) {
+           time = millis();
+         }
+       }  // Debounce end
+       
         Step_Multi_Function_Button1 = Step_Multi_Function_Button1++;
         if (Step_Multi_Function_Button1 > 2 ) 
         { 
@@ -1532,7 +1546,7 @@ void Step_Function()
             Step_Select_Button1 = Selected_BW; // 
             Step_Select(); //
             Selection();
-            for (int i=0; i <= 255; i++); // short delay
+//            for (int i=0; i <= 255; i++); // short delay
 
             break;   //
 
@@ -1541,7 +1555,7 @@ void Step_Function()
             Step_Select_Button1 = Selected_Step; //
             Step_Select(); //
             Selection();
-            for (int i=0; i <= 255; i++); // short delay
+//            for (int i=0; i <= 255; i++); // short delay
 
             break;   //
 
@@ -1550,7 +1564,7 @@ void Step_Function()
             Step_Select_Button1 = Selected_Other; //
             Step_Select(); //
             Selection();
-            for (int i=0; i <= 255; i++); // short delay
+//            for (int i=0; i <= 255; i++); // short delay
 
             break;   //  
     }
@@ -1562,9 +1576,18 @@ void  Selection()
 {
     Step_Select_Button = digitalRead(Select_Button);
     if (Step_Select_Button == HIGH) 
-    {   
-       while( digitalRead(Select_Button) == HIGH ){ }  // added for testing
-        for (int i=0; i <= 150e3; i++); // short delay
+    {  
+       // Debounce start
+       unsigned long time;
+       unsigned long start_time;
+      
+       time = millis(); 
+       while( digitalRead(Select_Button) == HIGH ){ 
+         start_time = time;
+         while( (time - start_time) < 7) {
+           time = millis();
+         }
+       }  // Debounce end
 
         Step_Select_Button1 = Step_Select_Button1++;
         if (Step_Select_Button1 > 2 ) 
@@ -1603,7 +1626,7 @@ void MF_G()    //  Multi-function Green
     digitalWrite(Multi_function_Green, HIGH);    
     digitalWrite(Multi_function_Yellow, LOW);  // 
     digitalWrite(Multi_function_Red, LOW);  //
-    for (int i=0; i <= 255; i++); // short delay   
+//    for (int i=0; i <= 255; i++); // short delay   
 }
 
 
@@ -1613,7 +1636,7 @@ void MF_Y()   //  Multi-function Yellow
     digitalWrite(Multi_function_Green, LOW);    
     digitalWrite(Multi_function_Yellow, HIGH);  // 
     digitalWrite(Multi_function_Red, LOW);  //
-    for (int i=0; i <= 255; i++); // short delay 
+//    for (int i=0; i <= 255; i++); // short delay 
 }
 
 
@@ -1623,7 +1646,7 @@ void MF_R()   //  Multi-function Red
     digitalWrite(Multi_function_Green, LOW);
     digitalWrite(Multi_function_Yellow, LOW);  // 
     digitalWrite(Multi_function_Red, HIGH);
-    for (int i=0; i <= 255; i++); // short delay  
+//    for (int i=0; i <= 255; i++); // short delay  
 }
 
 
@@ -1640,7 +1663,7 @@ void S_G()  // Select Green
     else if (Step_Multi_Function_Button1 == 2)  
         Other_1(); 
 
-    for (int i=0; i <= 255; i++); // short delay   
+//    for (int i=0; i <= 255; i++); // short delay   
 }
 
 
@@ -1663,7 +1686,7 @@ void S_Y()  // Select Yellow
         Other_2();
     }
 
-    for (int i=0; i <= 255; i++); // short delay   
+//    for (int i=0; i <= 255; i++); // short delay   
 }
 
 
@@ -1686,7 +1709,7 @@ void S_R()  // Select Red
         Other_3(); 
     }
 
-    for (int i=0; i <= 255; i++); // short delay
+//    for (int i=0; i <= 255; i++); // short delay
 }
 
 //----------------------------------------------------------------------------------
