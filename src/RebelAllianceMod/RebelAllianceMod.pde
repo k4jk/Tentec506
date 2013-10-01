@@ -45,7 +45,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
   Control Register D15, D14 = 00, D13(B28) = 1, D12(HLB) = X,
   Reset goes high to set the internal reg to 0 and sets the output to midscale.
   Reset is then taken low to enable output. 
- ***************************************************   
+ ***************************************************/   
 
   
 // various defines
@@ -1401,9 +1401,18 @@ void Multi_Function() // The right most pushbutton for BW, Step, Other
 {
     Step_Multi_Function_Button = digitalRead(Multi_Function_Button);
     if (Step_Multi_Function_Button == HIGH) 
-    {   
-       while( digitalRead(Multi_Function_Button) == HIGH ){ }  // added for testing
-        for (int i=0; i <= 150e3; i++); // short delay
+    {  
+       // Debounce start
+       unsigned long time;
+       unsigned long start_time;
+      
+       time = millis(); 
+       while( digitalRead(Multi_Function_Button) == HIGH ){ 
+         start_time = time;
+         while( (time - start_time) < 7) {
+           time = millis();
+         }
+       } // Debounce end
 
         Step_Multi_Function_Button1 = Step_Multi_Function_Button1++;
         if (Step_Multi_Function_Button1 > 2 ) 
@@ -1425,7 +1434,7 @@ void Step_Function()
             Step_Select_Button1 = Selected_BW; // 
             Step_Select(); //
             Selection();
-            for (int i=0; i <= 255; i++); // short delay
+// no longer needed            for (int i=0; i <= 255; i++); // short delay
 
             break;   //
 
@@ -1434,7 +1443,7 @@ void Step_Function()
             Step_Select_Button1 = Selected_Step; //
             Step_Select(); //
             Selection();
-            for (int i=0; i <= 255; i++); // short delay
+// no longer needed            for (int i=0; i <= 255; i++); // short delay
 
             break;   //
 
@@ -1443,7 +1452,7 @@ void Step_Function()
             Step_Select_Button1 = Selected_Other; //
             Step_Select(); //
             Selection();
-            for (int i=0; i <= 255; i++); // short delay
+// no longer needed            for (int i=0; i <= 255; i++); // short delay
 
             break;   //  
     }
@@ -1456,8 +1465,17 @@ void  Selection()
     Step_Select_Button = digitalRead(Select_Button);
     if (Step_Select_Button == HIGH) 
     {   
-       while( digitalRead(Select_Button) == HIGH ){ }  // added for testing
-        for (int i=0; i <= 150e3; i++); // short delay
+       // Debounce start
+       unsigned long time;
+       unsigned long start_time;
+       
+       time = millis();
+       while( digitalRead(Select_Button) == HIGH ){ 
+         start_time = time;
+         while( (time - start_time) < 7) {
+           time = millis();
+         }
+       } // Debounce end
 
         Step_Select_Button1 = Step_Select_Button1++;
         if (Step_Select_Button1 > 2 ) 
@@ -1496,7 +1514,7 @@ void MF_G()    //  Multi-function Green
     digitalWrite(Multi_function_Green, HIGH);    
     digitalWrite(Multi_function_Yellow, LOW);  // 
     digitalWrite(Multi_function_Red, LOW);  //
-    for (int i=0; i <= 255; i++); // short delay   
+// no longer needed    for (int i=0; i <= 255; i++); // short delay   
 }
 
 
@@ -1506,7 +1524,7 @@ void MF_Y()   //  Multi-function Yellow
     digitalWrite(Multi_function_Green, LOW);    
     digitalWrite(Multi_function_Yellow, HIGH);  // 
     digitalWrite(Multi_function_Red, LOW);  //
-    for (int i=0; i <= 255; i++); // short delay 
+// no longer needed    for (int i=0; i <= 255; i++); // short delay 
 }
 
 
@@ -1516,7 +1534,7 @@ void MF_R()   //  Multi-function Red
     digitalWrite(Multi_function_Green, LOW);
     digitalWrite(Multi_function_Yellow, LOW);  // 
     digitalWrite(Multi_function_Red, HIGH);
-    for (int i=0; i <= 255; i++); // short delay  
+// no longer needed    for (int i=0; i <= 255; i++); // short delay  
 }
 
 
@@ -1533,7 +1551,7 @@ void S_G()  // Select Green
     else if (Step_Multi_Function_Button1 == 2)  
         Other_1(); 
 
-    for (int i=0; i <= 255; i++); // short delay   
+// no longer needed    for (int i=0; i <= 255; i++); // short delay   
 }
 
 
@@ -1556,7 +1574,7 @@ void S_Y()  // Select Yellow
         Other_2();
     }
 
-    for (int i=0; i <= 255; i++); // short delay   
+// no longer needed    for (int i=0; i <= 255; i++); // short delay   
 }
 
 
@@ -1579,7 +1597,7 @@ void S_R()  // Select Red
         Other_3(); 
     }
 
-    for (int i=0; i <= 255; i++); // short delay
+// no longer needed    for (int i=0; i <= 255; i++); // short delay
 }
 
 //----------------------------------------------------------------------------------
