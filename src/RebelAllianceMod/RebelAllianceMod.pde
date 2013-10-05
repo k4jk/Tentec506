@@ -95,20 +95,20 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define  Other_3_user                       2           //
 
 //-------------------------------  SET OPTONAL FEATURES HERE  -------------------------------------------------------------
-//#define FEATURE_DISPLAY              // LCD display support (include one of the interface and model options below)
-//#define FEATURE_LCD_4BIT             // Classic LCD display using 4 I/O lines. **Working**
+#define FEATURE_DISPLAY              // LCD display support (include one of the interface and model options below)
+#define FEATURE_LCD_4BIT             // Classic LCD display using 4 I/O lines. **Working**
 //#define FEATURE_I2C                  // I2C Support
 //#define FEATURE_LCD_I2C_SSD1306      // If using an Adafruit 1306 I2C OLED Display. Use modified Adafruit libraries found here: github.com/pstyle/Tentec506/tree/master/lib/display  **Working**
 //#define FEATURE_LCD_NOKIA5110        // If using a NOKIA5110 Display. Use modified Adafruit libraries found here: github.com/pstyle/Tentec506/tree/master/lib/display  **Working**
 //#define FEATURE_LCD_I2C_1602         // 1602 Display with I2C backpack interface. Mine required pull-up resistors (2.7k) on SDA/SCL **WORKING**
 //#define FEATURE_CW_DECODER           // Not implemented yet.
 #define FEATURE_KEYER                // Keyer based on code from OpenQRP.org. **Working**
-//#define FEATURE_BEACON               // Use USER Menu 3 to Activate.  Make sure to change the Beacon text below! **Working**
+#define FEATURE_BEACON               // Use USER Menu 3 to Activate.  Make sure to change the Beacon text below! **Working**
 //#define FEATURE_SERIAL               // Enables serial output.  Only used for debugging at this point.  **Working**
-//#define FEATURE_BANDSWITCH           // Software based Band Switching.  **Working with additional Hardware**
+#define FEATURE_BANDSWITCH           // Software based Band Switching.  Press FUNCTION > 2 seconds  **Working with additional Hardware**
 #define FEATURE_SPEEDCONTROL         //Analog speed control (uses onboard trimpot connected to A7) **Working**
-//#define FEATURE_CAT_CONTROL           // Enables CAT based on Kenwood All Frequency set and Interogation  FA00007030000; , IF; **Working**
-
+#define FEATURE_CAT_CONTROL           // Enables CAT based on Kenwood All Frequency set and Interogation  FA00007030000; , IF; **Working**
+#define FEATURE_FREQANNOUNCE           // Announce Frequency by keying side tone (not TX). Press SELECT > 2 seconds  **Working**
 
 const int RitReadPin        = A0;  // pin that the sensor is attached to used for a rit routine later.
 int RitReadValue            = 0;
@@ -1201,6 +1201,38 @@ void sendmsg(char *str) {
     send(*str++) ;
 }
 #endif FEATURE_BEACON
+
+#ifdef FEATURE_FREQANNOUNCE
+void announce(char *str) {
+  while (*str) 
+    key_announce(*str++); 
+}
+void beep(int LENGTH) {
+    digitalWrite(Side_Tone, HIGH);
+    delay(LENGTH);
+    digitalWrite(Side_Tone, LOW);
+    delay(DOTLEN) ;
+}
+
+void key_announce(char c) {
+  for (int i=0; i<N_MORSE; i++) {
+    if (morsetab[i].c == c) {
+      unsigned char p = morsetab[i].pat ;
+      while (p != 1) {
+          if (p & 1)
+            beep(DASHLEN) ;
+          else
+            beep(DOTLEN) ;
+          p = p / 2 ;
+          }
+      delay(2*DOTLEN) ;
+      return ;
+      }
+  }
+}
+
+#endif
+
 //----------------------------------------------------------------------------
 void RIT_Read()
 {
@@ -1686,9 +1718,30 @@ void  Selection()
        // Debounce start
        unsigned long time;
        unsigned long start_time;
+       #ifdef FEATURE_FREQANNOUNCE
+         unsigned long long_time;
+         long_time = millis();
+       #endif
        
        time = millis();
        while( digitalRead(Select_Button) == HIGH ){ 
+         
+         #ifdef FEATURE_FREQANNOUNCE
+           // function button is pressed longer then 2 seconds
+           if ( (millis() - long_time) > 2000 && (millis() - long_time) < 2010 ) { 
+             // announce frequency
+             TX_frequency = (frequency + IF)/100;
+             char buffer[8];
+             ltoa(TX_frequency, buffer, 10);
+             announce(buffer);
+        
+             // wait for button release
+             while( digitalRead(Select_Button) == HIGH ){ 
+             }   
+             return;        
+           } 
+         #endif
+
          start_time = time;
          while( (time - start_time) < 7) {
            time = millis();
