@@ -95,18 +95,19 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define  Other_3_user                       2           //
 
 //-------------------------------  SET OPTONAL FEATURES HERE  -------------------------------------------------------------
-//#define FEATURE_DISPLAY              // LCD display support (include one of the interface and model options below)
-//#define FEATURE_LCD_4BIT             // Classic LCD display using 4 I/O lines. **Working**
+#define FEATURE_DISPLAY              // LCD display support (include one of the interface and model options below)
+#define FEATURE_LCD_4BIT             // Classic LCD display using 4 I/O lines. **Working**
 //#define FEATURE_I2C                  // I2C Support
 //#define FEATURE_LCD_I2C_SSD1306      // If using an Adafruit 1306 I2C OLED Display. Use modified Adafruit libraries found here: github.com/pstyle/Tentec506/tree/master/lib/display  **Working**
 //#define FEATURE_LCD_NOKIA5110        // If using a NOKIA5110 Display. Use modified Adafruit libraries found here: github.com/pstyle/Tentec506/tree/master/lib/display  **Working**
 //#define FEATURE_LCD_I2C_1602         // 1602 Display with I2C backpack interface. Mine required pull-up resistors (2.7k) on SDA/SCL **WORKING**
 //#define FEATURE_CW_DECODER           // Not implemented yet.
 #define FEATURE_KEYER                // Keyer based on code from OpenQRP.org. **Working**
-//#define FEATURE_BEACON               // Use USER Menu 3 to Activate.  Make sure to change the Beacon text below! **Working**
+#define FEATURE_BEACON               // Use USER Menu 3 to Activate.  Make sure to change the Beacon text below! **Working**
 //#define FEATURE_SERIAL               // Enables serial output.  Only used for debugging at this point.  **Working**
-//#define FEATURE_BANDSWITCH           // Software based Band Switching.  Not implemented yet.
-//#define FEATURE_SPEEDCONTROL         //Analog speed control (uses onboard trimpot connected to A7) **Working**
+#define FEATURE_BANDSWITCH           // Software based Band Switching.  Not implemented yet.
+#define FEATURE_SPEEDCONTROL         //Analog speed control (uses onboard trimpot connected to A7) **Working**
+#define FEATURE_CAT_CONTROL           // Enables CAT based on Kenwood All Frequency set and Interogation  FA00007030000; , IF; **Working**
 
 
 const int RitReadPin        = A0;  // pin that the sensor is attached to used for a rit routine later.
@@ -191,10 +192,8 @@ struct t_mtab morsetab[] = {
 
 #endif  // FEATURE_BEACON
 
-#ifndef FEATURE_SPEEDCONTROL
 //-----------############  SET CW SPEED HERE (If you dont use the analog control)  #######-------------
 int ManualCWSpeed = 15; //  <---- SET MANUAL CW SPEED HERE
-#endif
 
 #ifdef FEATURE_KEYER
 //  keyerControl bit definitions
@@ -216,6 +215,7 @@ enum KSTYPE {IDLE, CHK_DIT, CHK_DAH, KEYED_PREP, KEYED, INTER_ELEMENT };
 
 #ifdef FEATURE_DISPLAY
 		
+const char txt0[22]         = "TT Rebel v0.7  K";
 const char txt3[8]          = "100 HZ ";
 const char txt4[8]          = "1 KHZ  ";
 const char txt5[8]          = "10 KHZ ";
@@ -233,6 +233,8 @@ const char txt70[3]         = "S:";
 const char txt71[5]         = "WPM:";
 const char txt72[5]         = "PWR:";
 const char txt73[7]         = "BEACON";
+const char txt74[7]         = "BDELAY";
+
 #endif  //FEATURE_DISPLAY
 
 #ifdef FEATURE_LCD_4BIT
@@ -272,7 +274,7 @@ int TX_key;
 
 int band_sel;                               // select band 40 or 20 meter
 int band_set;
-int bsm;  
+int bsm                         = 0;  
 
 int Step_Select_Button          = 0;
 int Step_Select_Button1         = 0;
@@ -445,7 +447,7 @@ void setup()
     AD9834_reset();                             // low to high
 
     Band_Set_40_20M();
-    //   Default_frequency();                   // what ever default is
+    Default_frequency();                       // what ever default is
 
     digitalWrite(TX_OUT,            LOW);       // turn off TX
 
@@ -453,8 +455,8 @@ void setup()
     Step_Size_100();   // Change for other Step_Size default!
     for (int i=0; i <= 5e4; i++);  // small delay
 
-    AD9834_init();
-    AD9834_reset();
+    //AD9834_init();
+    //AD9834_reset();
 
     encoder0PinALast = digitalRead(encoder0PinA);  
     //attachInterrupt(encoder0PinA, Encoder, CHANGE);
@@ -466,22 +468,11 @@ void setup()
     Serial.println("Rebel Ready:");
 #endif
 
-#ifdef FEATURE_KEYER
-    keyerState = IDLE;
-    keyerControl = IAMBICB;      
-    checkWPM();                 // Check CW Speed 
-    
-    //See if user wants to use a straight key
-    if ((digitalRead(TX_Dah) == LOW) || (digitalRead(TX_Dit) == LOW)) {    //Is a lever pressed?
-      ST_key = 1;      //If so, enter straight key mode
-    }
-#endif
-
 #ifdef FEATURE_LCD_4BIT  //Initialize 4bit Display
 //--------------------------------------------------------------
-  lcd.begin(16, 4);                           // 20 chars 4 lines
-                                              // or change to suit ones 
-                                              // lcd display 
+  lcd.begin(20, 4);                           // 20 chars 4 lines
+  lcd.setCursor(0, 0);
+  lcd.print(txt0); // Rebel text
 //--------------------------------------------------------------
 #endif
 
@@ -512,6 +503,25 @@ void setup()
   lcd.print("506 REBEL");
   delay(2000);
   lcd.clear();   // Clear Display
+#endif
+
+#ifdef FEATURE_KEYER
+    keyerState = IDLE;
+    keyerControl = IAMBICB;      
+    checkWPM();                 // Set default CW Speed 
+    
+    //See if user wants to use a straight key
+    if ((digitalRead(TX_Dah) == LOW) || (digitalRead(TX_Dit) == LOW)) {    //Is a lever pressed?
+      ST_key = 1;      //If so, enter straight key mode   
+  #ifdef FEATURE_LCD_4BIT
+      lcd.setCursor(15, 0);
+      lcd.print("S");  //Change K = Keyer to S = Straight key
+  #endif
+    }
+#endif
+
+#ifdef FEATURE_CAT_CONTROL  //Initialize CAT control
+    Serial.begin(38400);
 #endif
 
 }   //    end of setup
@@ -546,7 +556,6 @@ void Default_Settings()
 
     digitalWrite (Side_Tone,            LOW);    
                                               
-
 }
 
 
@@ -562,6 +571,10 @@ void loop()     //
     Multi_Function(); 
 
     Encoder();
+
+    #ifdef FEATURE_CAT_CONTROL
+      Serial_Cat();
+    #endif
 
     frequency_tune  = frequency + RitFreqOffset;
     UpdateFreq(frequency_tune);
@@ -592,13 +605,13 @@ void loop()     //
           lcd.setCursor(4,1);
           lcd.print(TX_frequency * 0.001);
           lcd.setCursor(14,1);
-          lcd.print(txt81);
+          lcd.print(txt73);
         #endif
         sendmsg(BEACON);
         beaconStartTime = millis();  //Reset the Timer for the beacon loop
         #ifdef FEATURE_LCD_4BIT
           lcd.setCursor(14,1);
-          lcd.print(txt82);
+          lcd.print(txt74);
         #endif
       }
     }
@@ -659,6 +672,87 @@ void    serialDump()
 } // end serialDump()
 #endif //FEATURE_SERIAL
 
+#ifdef FEATURE_CAT_CONTROL
+// CAT interface based on Kenwood CAT protocal IF; and FA commands.
+// Tested with Logger32 @ 38400 Bd and 500mS polling
+void Serial_Cat() {
+  int digits;
+  String command;
+  int value = 0;
+  char encodeFreqChar;
+  // Expects (and wait for) 3 or 22 characters (IF; or FR0;FAxxxxxxxxxxx;MD3;)
+  if (Serial.available() > 0) {
+     // Read
+    do
+    {
+      digits = Serial.available();
+    } while (digits < 3); 
+    for (int i=0; i<digits; i++)
+    {
+      encodeFreqChar = Serial.read();
+      command += encodeFreqChar;
+    }
+    if (command == "IF;") {
+      // info asked from Rebel
+      lcd.setCursor(16,2);
+      lcd.print("T");
+      // send data only when you receive data:
+      // data should be IFfffffffffffxxxxxrrrrrxxxmm00xx00xxx;
+      #ifndef FEATURE_BANDSWITCH
+        bsm = digitalRead(Band_Select); 
+      #endif
+      if ( bsm == 1 ) // 20 meter
+      { 
+        Serial.print("IF000");
+      }
+      else 
+      { 
+        Serial.print("IF0000");
+      }
+      TX_frequency = frequency + IF;
+      Serial.print(TX_frequency);
+      Serial.println("xxxxx-0000xxx0000xx00xxx;");
+    }
+    else
+    {
+      //expecting frequency
+      do
+    {
+      digits = Serial.available();
+    } while (digits < 19); 
+    for (int i=0; i<digits; i++)
+    {
+      encodeFreqChar = Serial.read();
+      if (i > 5 && i <13 ) {
+        #ifdef FEATURE_LCD_4BIT
+          lcd.setCursor(16,2);
+          lcd.print("R");
+        #endif
+        value *= 10;
+        value += (encodeFreqChar - '0');
+      }
+    }
+    if ( (value > 700000 && value < 730000) || (value > 1400000 && value < 1435000)  )
+    {
+    #ifdef FEATURE_BANDSWITCH
+      if ( (value > 700000 && value < 730000) && bsm == 1)
+      {
+        bsm = 0;
+        Band_Set_40_20M();
+      }
+      if ( (value > 1400000 && value < 1430000) && bsm == 0)
+      {
+        bsm = 1;
+        Band_Set_40_20M();
+      }   
+    #endif
+    frequency = value*10 -IF;
+    }
+    }
+  }
+}
+#endif  // FEATURE_CAT_INPUT
+
 #ifndef FEATURE_BANDSWITCH
 //------------------ Band Select ------------------------------------
 void Band_Set_40_20M()
@@ -692,13 +786,14 @@ void Band_Set_40_20M()
     if ( bsm == 1 ) 
     { 
         frequency_default = meter_20;
+        if ( IF < 0 ) { IF *= -1; }
         digitalWrite(Band_Select,LOW);
     }
     else 
     { 
         frequency_default = meter_40; 
-        IF *= -1;               //  HI side injection
-        digitalWrite(Band_Select,HIGN);
+        if ( IF > 0 ) { IF *= -1; }               //  HI side injection
+        digitalWrite(Band_Select,HIGH);
     }
 
     Default_frequency();
@@ -794,6 +889,15 @@ void TX_routine()
             digitalWrite(FREQ_REGISTER_BIT, HIGH);
             digitalWrite(TX_OUT, HIGH);
             digitalWrite(Side_Tone, HIGH);
+            #ifdef FEATURE_LCD_4BIT
+              TX_frequency = frequency + IF;
+              lcd.setCursor(0,1);
+              lcd.print(txt68); // TX
+              lcd.setCursor(4,1);
+              lcd.print(TX_frequency * 0.001);
+              Display_RIT(1);
+              loopStartTime = millis();//Reset the Timer for this loop
+            #endif
             TX_key = digitalRead(TX_Dit);
         } while (TX_key == LOW);   // was high 
         //PowerOutReadValue = analogRead(PowerOutReadpin); 
@@ -826,7 +930,16 @@ void TX_routine()
             digitalWrite(FREQ_REGISTER_BIT, HIGH);
             digitalWrite(TX_OUT, HIGH);
             digitalWrite(Side_Tone, HIGH);
-            TX_key = digitalRead(TX_Dit);
+             #ifdef FEATURE_LCD_4BIT
+              TX_frequency = frequency + IF;
+              lcd.setCursor(0,1);
+              lcd.print(txt68); // TX
+              lcd.setCursor(4,1);
+              lcd.print(TX_frequency * 0.001);
+              Display_RIT(1);
+              loopStartTime = millis();//Reset the Timer for this loop
+            #endif
+           TX_key = digitalRead(TX_Dit);
         } while (TX_key == LOW);   // was high 
 
         digitalWrite(TX_OUT, LOW);  // turn off TX
@@ -885,6 +998,15 @@ void TX_routine()
         digitalWrite(FREQ_REGISTER_BIT, HIGH);
         digitalWrite(TX_OUT, HIGH);         // key the line
         digitalWrite(Side_Tone, HIGH);      // Tone
+        #ifdef FEATURE_LCD_4BIT
+          TX_frequency = frequency + IF;
+          lcd.setCursor(0,1);
+          lcd.print(txt68); // TX
+          lcd.setCursor(4,1);
+          lcd.print(TX_frequency * 0.001);
+          Display_RIT(1);
+          loopStartTime = millis();//Reset the Timer for this loop
+        #endif
         ktimer += millis();                 // set ktimer to interval end time
         keyerControl &= ~(DIT_L + DAH_L);   // clear both paddle latch bits
         keyerState = KEYED;                 // next state
@@ -1012,6 +1134,15 @@ void key(int LENGTH) {
   digitalWrite(FREQ_REGISTER_BIT, HIGH);
   digitalWrite(TX_OUT, HIGH);          // key the line
   digitalWrite(Side_Tone, HIGH);       // Tone
+  #ifdef FEATURE_LCD_4BIT
+    TX_frequency = frequency + IF;
+    lcd.setCursor(0,1);
+    lcd.print(txt68); // TX
+    lcd.setCursor(4,1);
+    lcd.print(TX_frequency * 0.001);
+    Display_RIT(1);
+    loopStartTime = millis();//Reset the Timer for this loop
+  #endif
   delay(LENGTH);
   digitalWrite(TX_OUT, LOW);           // turn the key off
   //for (int i=0; i <= 10e3; i++);       // delay for maybe some decay on key release
@@ -1171,20 +1302,38 @@ void Display_Refresh()  //LCD_4Bit Version - Cleaned up, added more Info and tes
     lcd.print(txt62); // RX
     lcd.setCursor(4,1);
     lcd.print(RX_frequency * 0.001);
+    lcd.print(" ");
 //RIT
-    lcd.setCursor(14, 1);
-    lcd.print("     ");
-    if (RitFreqOffset < 0) {
-      lcd.setCursor(14, 1);
-    } else {
-      lcd.setCursor(15, 1);
-    }      
-    lcd.print(RitFreqOffset);
-//QRG
-    //lcd.setCursor(0,1);	
-    //lcd.print(txt68); // TX
-    //lcd.setCursor(4,1);
-    //lcd.print(TX_frequency * 0.001);
+    Display_RIT(0);
+// 3rd line, BW, STEP, S, Cat Status (T / R), SPEED
+    lcd.setCursor(0,2);
+    if (Selected_BW == 0) lcd.print("W");
+    if (Selected_BW == 1) lcd.print("M");
+    if (Selected_BW == 2) lcd.print("N");
+    lcd.setCursor(2,2);
+    if (Selected_Step == 0) lcd.print("100");
+    if (Selected_Step == 1) lcd.print("1K ");
+    if (Selected_Step == 2) lcd.print("10K");
+//S Meter 
+    lcd.setCursor(6,2);
+    lcd.print("S"); // S
+    SmeterReadValue = analogRead(SmeterReadPin);
+    SmeterReadValue = map(SmeterReadValue, 0, 180, 0, 9);
+    //lcd.print(SmeterReadValue);  
+    lcd.setCursor(7,2);
+    lcd.print("-        ");  // clear meter bar area
+    for (int i=1; i < SmeterReadValue; i++) {
+      lcd.setCursor(6+i,2); 
+      if ( i == 5 || i == 9 )
+      {
+        lcd.print(i);
+      }  
+      else
+      {
+        lcd.print(255, BYTE); 
+      }
+    }
+/*
 // DC Volts In
     lcd.setCursor(0,2);
     lcd.print(txt69); // V
@@ -1207,9 +1356,39 @@ void Display_Refresh()  //LCD_4Bit Version - Cleaned up, added more Info and tes
       lcd.print(CWSpeedReadValue);
       }
     #endif
- 
- }
+   */
+ // CW Speed - Moved this over past the S meter on the fourth line
+    #ifdef FEATURE_KEYER //Did user enable keyer function?
+      if(ST_key == 0) {  //Did they also plug a paddle in? (or at least NOT plug in a straight key?)
+      lcd.setCursor(18,2);
+      lcd.print(CWSpeedReadValue);
+      }
+    #endif
+}
 
+void Display_RIT(int z)
+{
+    lcd.setCursor(14, 1);
+    lcd.print("      ");  // clear 6 last characters on line 1
+    int noritinfo = 0;
+    #ifdef FEATURE_BEACON
+      if ( Selected_Other == 2 )
+      {
+      lcd.setCursor(14, 1);
+      lcd.print(txt74); // BDELAY
+      noritinfo = 1;
+      }
+    #endif
+    if ( !noritinfo && !z )
+    {
+      if (RitFreqOffset < 0) {
+        lcd.setCursor(14, 1);
+      } else {
+        lcd.setCursor(15, 1);
+      }      
+      lcd.print(RitFreqOffset);
+    }  
+}
 #endif //FEATURE_LCD_4BIT
 
 #ifdef FEATURE_LCD_I2C_SSD1306  
@@ -1668,11 +1847,14 @@ void Other_2()      //  User Defined Control Software
 void Other_3()       //  User Defined Control Software
 {
     #ifdef FEATURE_BEACON
-	// Place Rebel into BEACON mode
-    beaconStartTime = millis() - ((BEACON_DELAY-2)*1000);  //Start Beacon after 2 seconds leaving the USER menu
-	#endif
+      // Start Beacon after 2 seconds
+      if ( Selected_Other != 2 ) 
+      {
+      beaconStartTime = millis() - ((BEACON_DELAY-2)*1000);  
+      }
+    #endif
 	
-	Selected_Other = Other_3_user;
+    Selected_Other = Other_3_user;
 }
 
 //-----------------------------------------------------------------------------
