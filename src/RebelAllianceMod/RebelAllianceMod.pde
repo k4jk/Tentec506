@@ -95,19 +95,19 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define  Other_3_user                       2           //
 
 //-------------------------------  SET OPTONAL FEATURES HERE  -------------------------------------------------------------
-#define FEATURE_DISPLAY              // LCD display support (include one of the interface and model options below)
-#define FEATURE_LCD_4BIT             // Classic LCD display using 4 I/O lines. **Working**
+//#define FEATURE_DISPLAY              // LCD display support (include one of the interface and model options below)
+//#define FEATURE_LCD_4BIT             // Classic LCD display using 4 I/O lines. **Working**
 //#define FEATURE_I2C                  // I2C Support
 //#define FEATURE_LCD_I2C_SSD1306      // If using an Adafruit 1306 I2C OLED Display. Use modified Adafruit libraries found here: github.com/pstyle/Tentec506/tree/master/lib/display  **Working**
 //#define FEATURE_LCD_NOKIA5110        // If using a NOKIA5110 Display. Use modified Adafruit libraries found here: github.com/pstyle/Tentec506/tree/master/lib/display  **Working**
 //#define FEATURE_LCD_I2C_1602         // 1602 Display with I2C backpack interface. Mine required pull-up resistors (2.7k) on SDA/SCL **WORKING**
 //#define FEATURE_CW_DECODER           // Not implemented yet.
 #define FEATURE_KEYER                // Keyer based on code from OpenQRP.org. **Working**
-#define FEATURE_BEACON               // Use USER Menu 3 to Activate.  Make sure to change the Beacon text below! **Working**
+//#define FEATURE_BEACON               // Use USER Menu 3 to Activate.  Make sure to change the Beacon text below! **Working**
 //#define FEATURE_SERIAL               // Enables serial output.  Only used for debugging at this point.  **Working**
-#define FEATURE_BANDSWITCH           // Software based Band Switching.  Not implemented yet.
+//#define FEATURE_BANDSWITCH           // Software based Band Switching.  **Working with additional Hardware**
 #define FEATURE_SPEEDCONTROL         //Analog speed control (uses onboard trimpot connected to A7) **Working**
-#define FEATURE_CAT_CONTROL           // Enables CAT based on Kenwood All Frequency set and Interogation  FA00007030000; , IF; **Working**
+//#define FEATURE_CAT_CONTROL           // Enables CAT based on Kenwood All Frequency set and Interogation  FA00007030000; , IF; **Working**
 
 
 const int RitReadPin        = A0;  // pin that the sensor is attached to used for a rit routine later.
@@ -215,7 +215,7 @@ enum KSTYPE {IDLE, CHK_DIT, CHK_DAH, KEYED_PREP, KEYED, INTER_ELEMENT };
 
 #ifdef FEATURE_DISPLAY
 		
-const char txt0[22]         = "TT Rebel v0.7  K";
+const char txt0[22]         = "TT Rebel v0.8  K";
 const char txt3[8]          = "100 HZ ";
 const char txt4[8]          = "1 KHZ  ";
 const char txt5[8]          = "10 KHZ ";
@@ -732,7 +732,12 @@ void Serial_Cat() {
         value += (encodeFreqChar - '0');
       }
     }
-    if ( (value > 700000 && value < 730000) || (value > 1400000 && value < 1435000)  )
+    #ifndef FEATURE_BANDSWITCH
+      if ( ((value > 700000 && value < 730000) && bsm == 0) || ((value > 1400000 && value < 1435000) && bsm == 1) )
+    #endif
+    #ifdef FEATURE_BANDSWITCH
+      if ( (value > 700000 && value < 730000) || (value > 1400000 && value < 1435000)  )
+    #endif
     {
     #ifdef FEATURE_BANDSWITCH
       if ( (value > 700000 && value < 730000) && bsm == 1)
@@ -797,6 +802,13 @@ void Band_Set_40_20M()
     }
 
     Default_frequency();
+    // flash Ten-Tec led
+    for (int t=0; t < (4-(bsm*2));) {
+      Step_Flash(); 
+      for (int i=0; i <= 200e3; i++); 
+      t++;
+    }
+
 }
 
 #endif
@@ -1584,9 +1596,36 @@ void Multi_Function() // The right most pushbutton for BW, Step, Other
        // Debounce start
        unsigned long time;
        unsigned long start_time;
+       #ifdef FEATURE_BANDSWITCH
+         unsigned long long_time;
+         long_time = millis();
+       #endif
       
-       time = millis(); 
+       time = millis();
        while( digitalRead(Multi_Function_Button) == HIGH ){ 
+         
+         #ifdef FEATURE_BANDSWITCH
+           // function button is pressed longer then 2 seconds
+           if ( (millis() - long_time) > 2000 && (millis() - long_time) < 2010 ) { 
+             // change band and load default frequency
+             if ( bsm == 1 )
+             {
+               bsm = 0;
+               Band_Set_40_20M();
+             }
+             else
+             {
+               bsm = 1;
+               Band_Set_40_20M();
+             }   
+        
+             // wait for button release
+             while( digitalRead(Multi_Function_Button) == HIGH ){ 
+             }   
+             return;        
+           } 
+         #endif
+         
          start_time = time;
          while( (time - start_time) < 7) {
            time = millis();
