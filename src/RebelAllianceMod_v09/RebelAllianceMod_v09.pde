@@ -96,10 +96,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 //-------------------------------  SET OPTONAL FEATURES HERE  -------------------------------------------------------------
 #define FEATURE_DISPLAY              // LCD display support (include one of the interface and model options below)
-#define FEATURE_LCD_4BIT             // Classic LCD display using 4 I/O lines. **Working**
+//#define FEATURE_LCD_4BIT             // Classic LCD display using 4 I/O lines. **Working**
 //#define FEATURE_I2C                  // I2C Support
 //#define FEATURE_LCD_I2C_SSD1306      // If using an Adafruit 1306 I2C OLED Display. Use modified Adafruit libraries found here: github.com/pstyle/Tentec506/tree/master/lib/display  **Working**
-//#define FEATURE_LCD_NOKIA5110        // If using a NOKIA5110 Display. Use modified Adafruit libraries found here: github.com/pstyle/Tentec506/tree/master/lib/display  **Working**
+#define FEATURE_LCD_NOKIA5110        // If using a NOKIA5110 Display. Use modified Adafruit libraries found here: github.com/pstyle/Tentec506/tree/master/lib/display  **Working**
 //#define FEATURE_LCD_I2C_1602         // 1602 Display with I2C backpack interface. Mine required pull-up resistors (2.7k) on SDA/SCL **WORKING**
 //#define FEATURE_CW_DECODER           // Not implemented yet.
 #define FEATURE_KEYER                // Keyer based on code from OpenQRP.org. **Working**
@@ -134,8 +134,9 @@ unsigned long       ditTime;                    // No. milliseconds per dit
 #ifdef FEATURE_BEACON
 // Simple Arduino CW Beacon Keyer
 // Written by Mark VandeWettering K6HX
-
-#define     BEACON          ("VVV")           // Beacon text 
+#define     URCALL          ("PA3ANG");  
+#define     BEACON          ("VVV")                                              // Beacon text 
+#define     CQ              ("CQ CQ CQ DE PA3ANG PA3ANG PA3ANG PSE K")           // CQ text 
 #define     CW_SPEED        20                                 // Beacon Speed    
 #define     BEACON_DELAY    10                                 // in seconds
 #define     N_MORSE  (sizeof(morsetab)/sizeof(morsetab[0]))    // Morse Table
@@ -216,6 +217,7 @@ enum KSTYPE {IDLE, CHK_DIT, CHK_DAH, KEYED_PREP, KEYED, INTER_ELEMENT };
 #ifdef FEATURE_DISPLAY
 		
 const char txt0[22]         = "TT Rebel v0.8  K";
+const char txt1[22]         = "ReAllMod v0.9";
 const char txt3[8]          = "100 HZ ";
 const char txt4[8]          = "1 KHZ  ";
 const char txt5[8]          = "10 KHZ ";
@@ -231,9 +233,13 @@ const char txt68[4]         = "TX:";
 const char txt69[3]         = "V:";
 const char txt70[3]         = "S:";
 const char txt71[5]         = "WPM:";
-const char txt72[5]         = "PWR:";
+const char txt72[5]         = "P:";
 const char txt73[7]         = "BEACON";
 const char txt74[7]         = "BDELAY";
+const char txt75[7]         = "CQCQCQ";
+const char txt76[7]         = "CQDELY";
+
+String CatStatus            = "#";
 
 #endif  //FEATURE_DISPLAY
 
@@ -298,10 +304,10 @@ int n                           = LOW;
 
 //------------------------------------------------------------
 const long meter_40             = 16.03e6;      // IF + Band frequency, 
-                                                // HI side injection 40 meter 
+long meter_40_memory            = 16.03e6;      // HI side injection 40 meter 
                                                 // range 16 > 16.3 mhz
 const long meter_20             = 5.06e6;       // Band frequency - IF, LOW 
-                                                // side injection 20 meter 
+long meter_20_memory            = 5.06e6;       // side injection 20 meter 
                                                 // range 5 > 5.35 mhz
 const long Reference            = 49.99975e6;   // for ad9834 this may be 
                                                 // tweaked in software to 
@@ -440,7 +446,10 @@ void setup()
 #endif
 
 #ifdef FEATURE_BANDSWITCH
-    pinMode (Band_Select,           OUTPUT);     // Used to control relays connected to fileter lines.
+    pinMode (Band_Select,           OUTPUT);    // Used to control relays connected to fileter lines.
+    bsm = 0;                                    // default start is 40 meter 
+    frequency = meter_20_memory;                // need to fool BANDSWITCH with 20 meter frequency 
+                                                // if bsm = 1 (20 meter) then fool with meter_40_memory
 #endif
 
     AD9834_init();
@@ -488,10 +497,22 @@ void setup()
   display.begin();  // init done 
   // you can change the contrast around to adapt the display
   // for the best viewing!
-  display.setContrast(55);
-  display.display(); // show splashscreen
-  delay(2000);
+  display.setContrast(45);
+  //display.display(); // show splashscreen
+  //delay(2000);
   display.clearDisplay();   // clears the screen and buffer
+  display.setTextSize(1);
+  display.setTextColor(BLACK);
+  display.setCursor(0,5);
+  display.println("     Rebel");
+  display.println(" Alliance Mod");
+  display.println("      by");
+  display.println(" KD8FJO, K4JK");
+  display.println("    PA3ANG");
+  display.drawRect(0, 0, display.width(), display.height(), BLACK);
+  display.display();       // show splashscreen
+  delay(5000);
+  
 #endif
 
 #ifdef FEATURE_LCD_I2C_1602  //Initialize I2C 1602 Display
@@ -531,17 +552,17 @@ void setup()
 //===================================================================
 void Default_Settings()
 {
-    digitalWrite(Multi_function_Green,  HIGH);  // Band_Width
+    digitalWrite(Multi_function_Green,  LOW);  // Band_Width
                                                 // place control here
 
     digitalWrite(Multi_function_Yellow, LOW);   //
                                                 // place control here
 
-    digitalWrite(Multi_function_Red,    LOW);   //
+    digitalWrite(Multi_function_Red,    HIGH);   //
                                                 // place control here
 
     digitalWrite(Select_Green,          HIGH);  //  
-    Band_Width_W();                             // place control here 
+    Band_Width_N();                             // place control here 
 
     digitalWrite(Select_Yellow,         LOW);   //
                                                 // place control here
@@ -593,7 +614,32 @@ void loop()     //
     TX_routine();
 	
     #ifdef FEATURE_BEACON
-    if ( Selected_Other == 2 ) 
+    if ( Selected_Other == 1 ) 
+    {
+      beaconElapsedTime = millis() - beaconStartTime; 
+      if( (BEACON_DELAY *1000) <= beaconElapsedTime )
+      {
+        #ifdef FEATURE_LCD_4BIT
+          TX_frequency = frequency + IF;
+          lcd.setCursor(0,1);
+          lcd.print(txt68); // TX
+          lcd.setCursor(4,1);
+          lcd.print(TX_frequency * 0.001);
+          lcd.setCursor(14,1);
+          lcd.print(txt75);
+        #endif
+        #ifdef FEATURE_LCD_NOKIA5110
+          Display_Refresh(3);
+        #endif
+        sendmsg(CQ);
+        beaconStartTime = millis();  //Reset the Timer for the beacon loop
+        #ifdef FEATURE_LCD_4BIT
+          lcd.setCursor(14,1);
+          lcd.print(txt76);
+        #endif
+      }
+    }
+   if ( Selected_Other == 2 ) 
     {
       beaconElapsedTime = millis() - beaconStartTime; 
       if( (BEACON_DELAY *1000) <= beaconElapsedTime )
@@ -606,6 +652,9 @@ void loop()     //
           lcd.print(TX_frequency * 0.001);
           lcd.setCursor(14,1);
           lcd.print(txt73);
+        #endif
+        #ifdef FEATURE_LCD_NOKIA5110
+          Display_Refresh(2);
         #endif
         sendmsg(BEACON);
         beaconStartTime = millis();  //Reset the Timer for the beacon loop
@@ -632,7 +681,7 @@ void loop()     //
         #endif
         
         #ifdef FEATURE_DISPLAY
-        Display_Refresh(); 
+        Display_Refresh(0); 
         #endif
         loopStartTime   = millis();
     }
@@ -698,6 +747,9 @@ void Serial_Cat() {
         lcd.setCursor(16,2);
         lcd.print("T");
       #endif
+      #ifdef FEATURE_LCD_NOKIA5110
+          CatStatus  =  "T";
+      #endif
       // send data only when you receive data:
       // data should be IFfffffffffffxxxxxrrrrrxxxmm00xx00xxx;
       #ifndef FEATURE_BANDSWITCH
@@ -730,6 +782,9 @@ void Serial_Cat() {
           lcd.setCursor(16,2);
           lcd.print("R");
         #endif
+      #ifdef FEATURE_LCD_NOKIA5110
+          CatStatus  =  "R";
+      #endif
         value *= 10;
         value += (encodeFreqChar - '0');
       }
@@ -792,13 +847,15 @@ void Band_Set_40_20M()
     //  select 40 or 20 meters 1 for 20 0 for 40
     if ( bsm == 1 ) 
     { 
-        frequency_default = meter_20;
+        meter_40_memory = frequency;
+        frequency_default = meter_20_memory;
         if ( IF < 0 ) { IF *= -1; }
         digitalWrite(Band_Select,LOW);
     }
     else 
     { 
-        frequency_default = meter_40; 
+        meter_20_memory = frequency;
+        frequency_default = meter_40_memory; 
         if ( IF > 0 ) { IF *= -1; }               //  HI side injection
         digitalWrite(Band_Select,HIGH);
     }
@@ -953,6 +1010,9 @@ void TX_routine()
               Display_RIT(1);
               loopStartTime = millis();//Reset the Timer for this loop
             #endif
+            #ifdef FEATURE_LCD_NOKIA5110
+              Display_Refresh(1);
+            #endif
            TX_key = digitalRead(TX_Dit);
         } while (TX_key == LOW);   // was high 
 
@@ -1020,6 +1080,9 @@ void TX_routine()
           lcd.print(TX_frequency * 0.001);
           Display_RIT(1);
           loopStartTime = millis();//Reset the Timer for this loop
+        #endif
+        #ifdef FEATURE_LCD_NOKIA5110
+          Display_Refresh(1);
         #endif
         ktimer += millis();                 // set ktimer to interval end time
         keyerControl &= ~(DIT_L + DAH_L);   // clear both paddle latch bits
@@ -1199,9 +1262,17 @@ void send(char c) {
 }
 
 void sendmsg(char *str) {
-  while (*str)
+  while (*str) {
+    if (digitalRead(TX_Dit) == LOW || digitalRead(TX_Dah) == LOW ) 
+  {
+  // stop automatic transmission Beacon and CQ
+  Selected_Other = Other_1_user;
+  return;
+  }
     send(*str++) ;
+  }  
 }
+
 #endif FEATURE_BEACON
 
 #ifdef FEATURE_FREQANNOUNCE
@@ -1448,7 +1519,7 @@ void Display_Refresh()  //SSD1306 I2C OLED Version
     RX_frequency = frequency_tune + IF;
     TX_frequency = frequency + IF;
     display.clearDisplay();   // clears the screen and buffer
-    display.setTextSize(1);
+    display.setTextSize(.);
     display.setTextColor(WHITE);
     display.setCursor(3,3);
     display.print(txt62); // RX
@@ -1495,8 +1566,14 @@ void Display_Refresh()  //SSD1306 I2C OLED Version
 
 #ifdef FEATURE_LCD_NOKIA5110  
 //------------------------Display Stuff below-----------------------------------
-void Display_Refresh()  //NOKIA5110  Version
+void Display_Refresh(int z)  //NOKIA5110  Version
 {
+
+    int s;
+    int line1 = 3;
+    int line2 = 18;
+    int line3 = 38;
+    int line4 = 28;
 #ifndef FEATURE_BANDSWITCH
     bsm = digitalRead(Band_Select); 
 #endif
@@ -1506,46 +1583,102 @@ void Display_Refresh()  //NOKIA5110  Version
     display.clearDisplay();   // clears the screen and buffer
     display.setTextSize(1);
     display.setTextColor(BLACK);
-    display.setCursor(3,3);
+    display.setCursor(3,line1);
+    display.print(txt1); // line 1
+    display.drawLine(2, 12, 80, 12, BLACK);
+     
+    display.setCursor(5,line2);
+    display.setTextSize(1);
+    if ( !z ) {	
     display.print(txt62); // RX
-    display.setCursor(20,3);
     display.print(RX_frequency * 0.001);
-	
-    display.setCursor(3,12);
-    display.setTextSize(1);	
+    display.setCursor(73,line2);
+    if (RitFreqOffset < -20 ) { 
+      display.print("-");
+    }
+    if (RitFreqOffset > 20 ) { 
+      display.print("+");
+    }
+    }
+    else
+    {
     display.print(txt68); // TX
-    display.setCursor(20,12);
     display.print(TX_frequency * 0.001);
-      
-    display.setCursor(3,21);
-    display.print(txt69); // V
-    BatteryReadValue = analogRead(BatteryReadPin)* BatteryVconvert;
-    display.setCursor(15,21);
-    display.print(BatteryReadValue);
+    }
+    
+    display.setTextSize(1);
+    display.setTextColor(BLACK);
+    display.setCursor(3,line3);
+    if (Selected_BW == 0) display.print("W");
+    if (Selected_BW == 1) display.print("M");
+    if (Selected_BW == 2) display.print("N");
+    display.setCursor(13,line3);
+    if (Selected_Step == 0) display.print("100");
+    if (Selected_Step == 1) display.print("1K ");
+    if (Selected_Step == 2) display.print("10K");
 
-    display.setCursor(50,21);
+    if ( !z ) {
+    display.setCursor(63,line3);
     display.print(txt70); // S
     SmeterReadValue = analogRead(SmeterReadPin);
-    SmeterReadValue = map(SmeterReadValue, 0, 180, 0, 9);
-    display.setCursor(65,21);
+    SmeterReadValue = map(SmeterReadValue, 0, 170, 0, 9);
+    display.setCursor(75,line3);
     display.print(SmeterReadValue);
+    }
+    else
+    {
+    display.setCursor(63,line3);
+    display.print(txt72); // P
+    PowerOutReadValue = analogRead(PowerOutReadPin);
+    PowerOutReadValue = map(PowerOutReadValue, 0, 1023, 0, 9);
+    display.setCursor(75,line3);
+    display.print(PowerOutReadValue);
+    }
+    //display.setCursor(3,21);
+    //display.print(txt69); // V
+    //BatteryReadValue = analogRead(BatteryReadPin)* BatteryVconvert;
+    //display.setCursor(15,21);
+    //display.print(BatteryReadValue);
     
     display.drawRect(0, 0, display.width(), display.height(), BLACK);
     
     #ifdef FEATURE_KEYER  //Did user enable keyer function?
       if(ST_key == 0) {   //Did they also plug a paddle in? (or at least NOT plug in a straight key?)
-    display.setCursor(3,39);
-    display.print(txt71); // WPM
-    display.setCursor(30,39);
+    //display.setCursor(3,21);
+    //display.print(txt71); // WPM
+    display.setCursor(36,line3);
     display.print(CWSpeedReadValue);
       }
+      else
+      {
+    display.setCursor(36,line3);
+    display.print("ST");
+      }       
+    #endif
+    
+    #ifdef FEATURE_CAT_CONTROL
+      display.setCursor(53,line3);
+      display.print(CatStatus);
     #endif
 
-  //  display.setCursor(45,21);	
-  //  display.print(txt72); // PWR
-  //  display.setCursor(70,21);
-  //  display.print(PowerOutReadValue);
-    
+
+    display.setTextSize(1);
+    display.setTextColor(BLACK);
+    #ifdef FEATURE_BEACON
+      display.setCursor(25,line4);
+      if ( z == 3 ) {
+        display.print(txt75);
+      }    
+      if ( Selected_Other == 1 && z != 3 ) {
+        display.print(txt76);
+      }    
+      if ( z == 2 ) {
+        display.print(txt73);
+      }    
+      if ( Selected_Other == 2 && z != 2 ) {
+        display.print(txt74);
+      }    
+     #endif
     display.display();
  }
 #endif
@@ -1934,6 +2067,14 @@ void Other_1()      //  User Defined Control Software
 //----------------------------------------------------------------------------------  
 void Other_2()      //  User Defined Control Software
 {
+    #ifdef FEATURE_BEACON
+      // Start CQ after 2 seconds
+      if ( Selected_Other != 1 ) 
+      {
+      beaconStartTime = millis() - ((BEACON_DELAY-2)*1000);  
+      }
+    #endif
+    
     Selected_Other = Other_2_user; 
 }
 
